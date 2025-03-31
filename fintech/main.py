@@ -20,6 +20,7 @@ from firebase_admin import initialize_app, firestore, credentials
 import json
 from financial_analysis import analyze_stock
 import os
+import functions_framework
 
 # Initialize Firebase Admin with service account credentials
 try:
@@ -31,32 +32,28 @@ except ValueError:
 
 db = firestore.client()
 
-@https_fn.on_request()
-def analyze_stock_endpoint(req: https_fn.Request) -> https_fn.Response:
+@functions_framework.http
+def analyze_stock_endpoint(request):
     # Enable CORS
-    if req.method == 'OPTIONS':
+    if request.method == 'OPTIONS':
         headers = {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'POST',
             'Access-Control-Allow-Headers': 'Content-Type, Accept'
         }
-        return https_fn.Response('', status=204, headers=headers)
+        return ('', 204, headers)
 
     # Handle the actual request
     try:
         # Get the request data
-        request_json = req.get_json()
+        request_json = request.get_json()
         ticker = request_json.get('ticker')
 
         if not ticker:
-            return https_fn.Response(
-                json.dumps({'error': 'Please provide a ticker symbol'}),
-                status=400,
-                headers={
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                }
-            )
+            return (json.dumps({'error': 'Please provide a ticker symbol'}), 400, {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            })
 
         # Analyze the stock
         result = analyze_stock(ticker)
@@ -68,24 +65,16 @@ def analyze_stock_endpoint(req: https_fn.Request) -> https_fn.Response:
             'timestamp': firestore.SERVER_TIMESTAMP
         })
 
-        return https_fn.Response(
-            json.dumps(result),
-            status=200,
-            headers={
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            }
-        )
+        return (json.dumps(result), 200, {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+        })
 
     except Exception as e:
-        return https_fn.Response(
-            json.dumps({'error': str(e)}),
-            status=500,
-            headers={
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            }
-        )
+        return (json.dumps({'error': str(e)}), 500, {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+        })
 
 #
 #
