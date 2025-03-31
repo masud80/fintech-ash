@@ -109,3 +109,4 @@ serviceAccountKey.json
 Thumbs.db
 venv
 /fintech/venv
+/.ipynb_checkpoints
