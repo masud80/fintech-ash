@@ -1,12 +1,12 @@
-flask==3.0.2
-python-dotenv==1.0.1
+flask
+python-dotenv
 firebase-admin==6.4.0
 gunicorn==21.2.0
 yfinance==0.2.36
 pandas==2.2.1
-crewai==0.108.0
-crewai-tools==0.0.20
-openai==1.12.0
+crewai
+crewai-tools
+openai
 functions-framework==3.*
 firebase-functions==0.1.0
 

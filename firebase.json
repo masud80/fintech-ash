@@ -8,10 +8,6 @@
     ],
     "rewrites": [
       {
-        "source": "/api/**",
-        "destination": "https://us-central1-fintech-ash-80b97.cloudfunctions.net/analyze_stock_endpoint"
-      },
-      {
         "source": "**",
         "destination": "/index.html"
       }
@@ -21,6 +17,35 @@
   },
   "functions": {
     "source": "fintech",
-    "runtime": "python312"
+    "runtime": "python312",
+    "memory": "1GB",
+    "ignore": [
+      "venv/**",
+      ".venv/**",
+      "env/**",
+      ".env/**",
+      "**/__pycache__/**",
+      "**/node_modules/**",
+      "**/*.pyc",
+      "**/*.pyo",
+      "**/*.pyd",
+      "**/site-packages/**",
+      "**/dist-packages/**",
+      "**/lib/python*/**",
+      "**/.pytest_cache/**",
+      "**/.coverage",
+      "**/htmlcov/**"
+    ],
+    "predeploy": [
+      "pip install -r requirements.txt"
+    ],
+    "build": {
+      "excludes": ["**/node_modules/**", "**/venv/**", "**/site-packages/**"],
+      "python": {
+        "compileAll": {
+          "excludes": ["**/venv/**", "**/site-packages/**", "**/lib/**", "**/node_modules/**"]
+        }
+      }
+    }
   }
 }
