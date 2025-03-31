@@ -108,3 +108,4 @@ serviceAccountKey.json
 .DS_Store
 Thumbs.db
 venv
+/fintech/venv
