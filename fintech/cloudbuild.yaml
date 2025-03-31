@@ -1,0 +1,55 @@
+steps:
+  # Install dependencies
+  - name: 'python:3.12'
+    entrypoint: pip
+    args: ['install', '-r', 'requirements.txt', '--no-deps', '-t', 'lib']
+  
+  # Install dependencies without templates
+  - name: 'python:3.12'
+    entrypoint: pip
+    args: ['install', '--no-deps', 'firebase-functions', 'firebase-admin', 'pandas', 'yfinance', 'python-dotenv', 'gunicorn', 'flask', '-t', 'lib']
+  
+  # Copy only the necessary Python files
+  - name: 'gcr.io/cloud-builders/gsutil'
+    args: ['-m', 'cp', 'main.py', 'financial_analysis.py', 'utils.py', 'lib/']
+  
+  # List contents of lib directory for verification
+  - name: 'gcr.io/cloud-builders/gsutil'
+    args: ['ls', '-r', 'lib/']
+  
+  # Create deployment package
+  - name: 'gcr.io/cloud-builders/gsutil'
+    args: ['-m', 'cp', '-r', 'lib/*', '${_SOURCE_DIR}/']
+    
+ignore:
+  - 'venv/**'
+  - '**/venv/**'
+  - '**/__pycache__/**'
+  - '**/*.pyc'
+  - '**/*.pyo'
+  - '**/*.pyd'
+  - '**/.Python'
+  - '**/pip-log.txt'
+  - '**/pip-delete-this-directory.txt'
+  - '**/.tox/**'
+  - '**/.coverage'
+  - '**/.coverage.*'
+  - '**/.cache'
+  - '**/.nosetests'
+  - '**/.coverage'
+  - '**/.coverage.*'
+  - '**/.cover'
+  - '**/.hypothesis/'
+  - '**/.pytest_cache/'
+  - '**/.env'
+  - '**/.env.local'
+  - '**/.env.*.local'
+  - '**/templates/**'
+  - '**/cli/**'
+  - '**/site-packages/**'
+  - '**/dist/**'
+  - '**/build/**'
+  - '**/eggs/**'
+  - '**/*.egg-info/**'
+  - 'cloudbuild.yaml'
+  - '**/cloudbuild.yaml' 

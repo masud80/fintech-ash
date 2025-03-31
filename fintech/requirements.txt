@@ -1,0 +1,8 @@
+firebase_functions~=0.1.0
+openai
+pandas
+firebase-admin
+yfinance
+python-dotenv
+gunicorn
+flask

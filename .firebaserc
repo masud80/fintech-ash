@@ -1,0 +1,9 @@
+{
+  "projects": {
+    "default": "fintech-ash-80b97"
+  },
+  "functions": {
+    "source": "fintech_ash",
+    "runtime": "python312"
+  }
+}
