@@ -6,3 +6,5 @@ yfinance
 python-dotenv
 gunicorn
 flask
+crewai
+crewai-tools
