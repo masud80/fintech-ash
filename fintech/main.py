@@ -21,6 +21,10 @@ import json
 from financial_analysis import analyze_stock
 import os
 import functions_framework
+from flask import Flask, request, jsonify
+
+# Initialize Flask app
+app = Flask(__name__)
 
 # Initialize Firebase Admin with service account credentials
 try:
@@ -75,6 +79,11 @@ def analyze_stock_endpoint(request):
             'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*'
         })
+
+# This is for local testing
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
 
 #
 #
