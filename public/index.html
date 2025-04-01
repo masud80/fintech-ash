@@ -154,7 +154,7 @@
       try {
         analytics.logEvent('analyze_stock', { ticker });
 
-        const response = await fetch('https://us-central1-fintech-ash-80b97.cloudfunctions.net/analyze_stock_endpoint', {
+        const response = await fetch('/api/analyze_stock_endpoint', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

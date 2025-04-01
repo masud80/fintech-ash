@@ -55,16 +55,32 @@ def analyze_stock_endpoint(req: https_fn.Request) -> https_fn.Response:
         # 🔍 Replace with actual stock analysis logic
         result = analyze_stock(ticker)
 
+        # Ensure result is in JSON format
+        if isinstance(result, dict):
+            # Handle nested CrewOutput objects
+            response_data = {}
+            for key, value in result.items():
+                if hasattr(value, 'raw'):
+                    response_data[key] = value.raw
+                else:
+                    response_data[key] = value
+        else:
+            # Handle direct CrewOutput object
+            if hasattr(result, 'raw'):
+                response_data = {"analysis_summary": result.raw}
+            else:
+                response_data = {"analysis_summary": str(result)}
+
         # Store in Firestore
         db.collection("previous_analysis").add({
             "user_id": uid,
             "ticker": ticker,
-            "result": result,
+            "result": response_data,
             "timestamp": firestore.SERVER_TIMESTAMP
         })
 
         return https_fn.Response(
-            json.dumps(result),
+            json.dumps(response_data),
             status=200,
             headers={**CORS_HEADERS, "Content-Type": "application/json"}
         )
