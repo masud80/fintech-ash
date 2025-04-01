@@ -178,16 +178,16 @@ function formatResults(data) {
     // Clear previous visualizations
     document.getElementById('visualizations').innerHTML = '';
     
-    if (data.financial_metrics) {
+    if (data.quantitative_data) {
         // Create visualizations for financial metrics
-        createFinancialVisualizations(data.financial_metrics);
+        createFinancialVisualizations(data.quantitative_data);
         
         html += `
             <div class="results-section">
                 <h3 class="results-section-title">Financial Metrics</h3>
                 <div class="metrics-grid">`;
         
-        for (const [key, value] of Object.entries(data.financial_metrics)) {
+        for (const [key, value] of Object.entries(data.quantitative_data)) {
             let metricClass = 'neutral-metric';
             if (typeof value === 'string' && value.includes('%')) {
                 const numericValue = parseFloat(value);
@@ -235,85 +235,218 @@ function formatResults(data) {
 }
 
 function createFinancialVisualizations(metrics) {
+    // Early return if no metrics are available
+    if (!metrics || typeof metrics !== 'object') {
+        console.warn('No valid metrics data available for visualization');
+        return;
+    }
+
     const visualizationsContainer = document.getElementById('visualizations');
-    
-    // Create a gauge chart for key metrics
-    const gaugeChart = document.createElement('canvas');
-    gaugeChart.id = 'gaugeChart';
-    visualizationsContainer.appendChild(gaugeChart);
-    
-    const gaugeCtx = gaugeChart.getContext('2d');
-    new Chart(gaugeCtx, {
-        type: 'doughnut',
-        data: {
-            labels: ['Positive', 'Negative'],
-            datasets: [{
-                data: [70, 30],
-                backgroundColor: ['#10B981', '#EF4444'],
-                borderWidth: 0
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            cutout: '80%',
-            plugins: {
-                legend: {
-                    display: false
+    visualizationsContainer.innerHTML = ''; // Clear existing visualizations
+
+    // Helper function to safely parse numeric values
+    const safeParseNumber = (value, removeSymbol = '') => {
+        if (!value || typeof value !== 'string') return null;
+        const cleanValue = value.replace(removeSymbol, '').replace('%', '').trim();
+        const parsed = parseFloat(cleanValue);
+        return isNaN(parsed) ? null : parsed;
+    };
+
+    // Helper function to check if we have enough valid data for a chart
+    const hasValidData = (dataObject) => {
+        const validValues = Object.values(dataObject).filter(val => val !== null);
+        return validValues.length > 0;
+    };
+
+    // Prepare profitability data
+    const profitabilityData = {
+        'Return on Equity': safeParseNumber(metrics['Return on Equity'], '%'),
+        'Profit Margins': safeParseNumber(metrics['Profit Margins'], '%')
+    };
+
+    if (hasValidData(profitabilityData)) {
+        const gaugeChart = document.createElement('canvas');
+        gaugeChart.id = 'gaugeChart';
+        visualizationsContainer.appendChild(gaugeChart);
+        
+        new Chart(gaugeChart.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(profitabilityData).filter(key => profitabilityData[key] !== null),
+                datasets: [{
+                    data: Object.values(profitabilityData).filter(val => val !== null),
+                    backgroundColor: ['#10B981', '#3B82F6'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '80%',
+                plugins: {
+                    legend: { position: 'bottom' },
+                    title: {
+                        display: true,
+                        text: 'Profitability Metrics (%)'
+                    }
                 }
             }
-        }
-    });
+        });
+    }
 
-    // Create a bar chart for comparing metrics
-    const barChart = document.createElement('canvas');
-    barChart.id = 'barChart';
-    visualizationsContainer.appendChild(barChart);
-    
-    const barCtx = barChart.getContext('2d');
-    const metricData = Object.entries(metrics)
-        .filter(([_, value]) => typeof value === 'string' && value.includes('%'))
-        .map(([key, value]) => ({
-            label: key,
-            value: parseFloat(value)
-        }));
+    // Prepare technical data
+    const technicalData = {
+        'RSI': safeParseNumber(metrics['RSI']),
+        'Beta': safeParseNumber(metrics['Beta']),
+        'Volatility': safeParseNumber(metrics['Volatility'], '%')
+    };
 
-    new Chart(barCtx, {
-        type: 'bar',
-        data: {
-            labels: metricData.map(d => d.label),
-            datasets: [{
-                label: 'Percentage Values',
-                data: metricData.map(d => d.value),
-                backgroundColor: metricData.map(d => 
-                    d.value > 0 ? '#10B981' : d.value < 0 ? '#EF4444' : '#6B7280'
-                ),
-                borderWidth: 0
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false
-                }
+    if (hasValidData(technicalData)) {
+        const barChart = document.createElement('canvas');
+        barChart.id = 'barChart';
+        visualizationsContainer.appendChild(barChart);
+        
+        const validLabels = Object.keys(technicalData).filter(key => technicalData[key] !== null);
+        const validData = validLabels.map(label => technicalData[label]);
+
+        new Chart(barChart.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: validLabels,
+                datasets: [{
+                    label: 'Technical Indicators',
+                    data: validData,
+                    backgroundColor: validLabels.map((_, i) => 
+                        ['#10B981', '#3B82F6', '#EF4444'][i % 3]
+                    ),
+                    borderWidth: 0
+                }]
             },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        display: false
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    title: {
+                        display: true,
+                        text: 'Technical Analysis Metrics'
                     }
                 },
-                x: {
-                    grid: {
-                        display: false
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { display: false }
+                    },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    // Prepare price data
+    const priceData = {
+        'Current Price': safeParseNumber(metrics['Current Price'], '$'),
+        'SMA50': safeParseNumber(metrics['SMA50'], '$'),
+        'SMA200': safeParseNumber(metrics['SMA200'], '$')
+    };
+
+    if (hasValidData(priceData)) {
+        const lineChart = document.createElement('canvas');
+        lineChart.id = 'lineChart';
+        visualizationsContainer.appendChild(lineChart);
+        
+        const validLabels = Object.keys(priceData).filter(key => priceData[key] !== null);
+        const validData = validLabels.map(label => priceData[label]);
+
+        new Chart(lineChart.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: validLabels,
+                datasets: [{
+                    label: 'Price Indicators ($)',
+                    data: validData,
+                    borderColor: '#10B981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    title: {
+                        display: true,
+                        text: 'Price Analysis'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { display: false }
+                    },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    // Prepare valuation data
+    const valuationData = {
+        'Forward P/E': safeParseNumber(metrics['Forward P/E']),
+        'Market Cap (B)': safeParseNumber(metrics['Market Cap']?.replace(/[^0-9.-]/g, '')) / 1e9,
+        'Beta': safeParseNumber(metrics['Beta'])
+    };
+
+    if (hasValidData(valuationData)) {
+        const radarChart = document.createElement('canvas');
+        radarChart.id = 'radarChart';
+        visualizationsContainer.appendChild(radarChart);
+        
+        const validLabels = Object.keys(valuationData).filter(key => valuationData[key] !== null);
+        const validData = validLabels.map(label => valuationData[label]);
+
+        new Chart(radarChart.getContext('2d'), {
+            type: 'radar',
+            data: {
+                labels: validLabels,
+                datasets: [{
+                    label: 'Valuation Metrics',
+                    data: validData,
+                    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                    borderColor: '#3B82F6',
+                    borderWidth: 2,
+                    pointBackgroundColor: '#3B82F6'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    title: {
+                        display: true,
+                        text: 'Valuation Analysis'
+                    }
+                },
+                scales: {
+                    r: {
+                        beginAtZero: true,
+                        ticks: { display: false }
                     }
                 }
             }
-        }
-    });
+        });
+    }
+
+    // Add a message if no charts were created
+    if (visualizationsContainer.children.length === 0) {
+        const noDataMessage = document.createElement('div');
+        noDataMessage.className = 'no-data-message';
+        noDataMessage.textContent = 'No valid quantitative data available for visualization';
+        visualizationsContainer.appendChild(noDataMessage);
+    }
 }
 
 function showError(message) {

@@ -4,10 +4,12 @@ from crewai import Agent, Task, Crew, LLM, Process
 from dotenv import load_dotenv
 from crewai_tools import ScrapeWebsiteTool, SerperDevTool
 import os
-from utils import get_openai_api_key, get_serper_api_key
+from utils import get_openai_api_key, get_serper_api_key, get_alpha_vantage_api_key
 import time
 from functools import lru_cache
 import logging
+import requests
+from datetime import datetime, timedelta
 
 load_dotenv()
 
@@ -16,53 +18,70 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-
 @lru_cache(maxsize=100)
 def get_stock_info(ticker):
     """
-    Cached function to get comprehensive stock info with retry logic
+    Cached function to get comprehensive stock info using Alpha Vantage API
     """
     max_retries = 3
     retry_delay = 5  # seconds
+    api_key = get_alpha_vantage_api_key()
     
     for attempt in range(max_retries):
         try:
-            stock = yf.Ticker(ticker)
-            info = stock.info
+            # Get daily time series data
+            daily_url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={ticker}&apikey={api_key}"
+            daily_response = requests.get(daily_url)
+            daily_data = daily_response.json()
             
-            # Get historical data for technical analysis
-            hist = stock.history(period="1y")
+            # Get company overview
+            overview_url = f"https://www.alphavantage.co/query?function=OVERVIEW&symbol={ticker}&apikey={api_key}"
+            overview_response = requests.get(overview_url)
+            overview_data = overview_response.json()
             
-            # Calculate additional metrics
-            if not hist.empty:
-                sma_50 = hist['Close'].rolling(window=50).mean().iloc[-1]
-                sma_200 = hist['Close'].rolling(window=200).mean().iloc[-1]
-                rsi = calculate_rsi(hist['Close'])
-                volatility = hist['Close'].pct_change().std() * (252 ** 0.5)  # Annualized volatility
+            if "Error Message" in daily_data or "Error Message" in overview_data:
+                raise Exception("API Error: " + (daily_data.get("Error Message") or overview_data.get("Error Message")))
+            
+            # Extract daily data
+            daily_series = daily_data.get("Time Series (Daily)", {})
+            latest_date = max(daily_series.keys())
+            latest_data = daily_series[latest_date]
+            
+            # Convert daily data to DataFrame for technical analysis
+            df = pd.DataFrame.from_dict(daily_series, orient='index')
+            df.index = pd.to_datetime(df.index)
+            df = df.astype(float)
+            
+            # Calculate technical indicators
+            if not df.empty:
+                sma_50 = df['4. close'].rolling(window=50).mean().iloc[-1]
+                sma_200 = df['4. close'].rolling(window=200).mean().iloc[-1]
+                rsi = calculate_rsi(df['4. close'])
+                volatility = df['4. close'].pct_change().std() * (252 ** 0.5)  # Annualized volatility
             else:
                 sma_50 = sma_200 = rsi = volatility = None
             
-            # Combine basic info with technical indicators
+            # Combine data from both endpoints
             enhanced_info = {
                 # Basic Info
-                'currentPrice': info.get('currentPrice'),
-                'marketCap': info.get('marketCap'),
-                'forwardPE': info.get('forwardPE'),
-                'trailingPE': info.get('trailingPE'),
-                'dividendYield': info.get('dividendYield'),
-                'beta': info.get('beta'),
-                'fiftyTwoWeekHigh': info.get('fiftyTwoWeekHigh'),
-                'fiftyTwoWeekLow': info.get('fiftyTwoWeekLow'),
-                'volume': info.get('volume'),
-                'averageVolume': info.get('averageVolume'),
+                'currentPrice': float(latest_data.get('4. close', 0)),
+                'marketCap': float(overview_data.get('MarketCapitalization', 0)),
+                'forwardPE': float(overview_data.get('ForwardPE', 0)),
+                'trailingPE': float(overview_data.get('TrailingPE', 0)),
+                'dividendYield': float(overview_data.get('DividendYield', 0)),
+                'beta': float(overview_data.get('Beta', 0)),
+                'fiftyTwoWeekHigh': float(overview_data.get('52WeekHigh', 0)),
+                'fiftyTwoWeekLow': float(overview_data.get('52WeekLow', 0)),
+                'volume': float(latest_data.get('5. volume', 0)),
+                'averageVolume': float(overview_data.get('AverageVolume', 0)),
                 
                 # Financial Metrics
-                'returnOnEquity': info.get('returnOnEquity'),
-                'profitMargins': info.get('profitMargins'),
-                'revenueGrowth': info.get('revenueGrowth'),
-                'debtToEquity': info.get('debtToEquity'),
-                'quickRatio': info.get('quickRatio'),
-                'currentRatio': info.get('currentRatio'),
+                'returnOnEquity': float(overview_data.get('ReturnOnEquityTTM', 0)),
+                'profitMargins': float(overview_data.get('ProfitMargin', 0)),
+                'revenueGrowth': float(overview_data.get('RevenueGrowth', 0)),
+                'debtToEquity': float(overview_data.get('DebtToEquityRatio', 0)),
+                'quickRatio': float(overview_data.get('QuickRatio', 0)),
+                'currentRatio': float(overview_data.get('CurrentRatio', 0)),
                 
                 # Technical Indicators
                 'SMA50': sma_50,
@@ -71,16 +90,16 @@ def get_stock_info(ticker):
                 'annualizedVolatility': volatility,
                 
                 # Additional Data
-                'sector': info.get('sector'),
-                'industry': info.get('industry'),
-                'fullTimeEmployees': info.get('fullTimeEmployees'),
-                'recommendationKey': info.get('recommendationKey')
+                'sector': overview_data.get('Sector'),
+                'industry': overview_data.get('Industry'),
+                'fullTimeEmployees': int(overview_data.get('FullTimeEmployees', 0)),
+                'recommendationKey': overview_data.get('AnalystTargetPrice')
             }
             
             return enhanced_info
             
         except Exception as e:
-            if "Too Many Requests" in str(e) and attempt < max_retries - 1:
+            if "API call frequency" in str(e) and attempt < max_retries - 1:
                 logger.warning(f"Rate limit hit, retrying in {retry_delay} seconds...")
                 time.sleep(retry_delay)
                 retry_delay *= 2  # Exponential backoff
@@ -265,7 +284,7 @@ def analyze_stock(stock_selection):
     result = financial_trading_crew.kickoff(inputs=financial_trading_inputs)
 
     # Combine quantitative data with analysis
-    final_result = {
+    result = {
         'quantitative_data': {
             'Current Price': f"${stock_data.get('currentPrice', 'N/A')}",
             'Market Cap': f"${stock_data.get('marketCap', 'N/A'):,.0f}" if stock_data.get('marketCap') else 'N/A',
@@ -282,10 +301,10 @@ def analyze_stock(stock_selection):
 
     # Ensure result is a dictionary with analysis_summary key
     if isinstance(result, str):
-        final_result['analysis_summary'] = result
+        result['analysis_summary'] = result
     elif isinstance(result, dict):
-        final_result['analysis_summary'] = result.get('analysis_summary', result)
+        result['analysis_summary'] = result.get('analysis_summary', result)
     else:
-        final_result['analysis_summary'] = str(result)
+        result['analysis_summary'] = str(result)
 
-    return final_result 
+    return result 

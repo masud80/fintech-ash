@@ -174,7 +174,7 @@ def check_existing_analysis(db: firestore.Client, ticker: str) -> tuple[bool, di
 
 
 
-@https_fn.on_request(memory=MemoryOption.GB_1, timeout_sec=540, secrets=["SERPER_API_KEY", "OPENAI_API_KEY"])
+@https_fn.on_request(memory=MemoryOption.GB_1, timeout_sec=540, secrets=["SERPER_API_KEY", "OPENAI_API_KEY", "ALPHA_VANTAGE_API_KEY"])
 def analyze_stock_endpoint(req: https_fn.Request) -> https_fn.Response:
     logger.info("Received request to analyze_stock_endpoint")
     if req.method == "OPTIONS":
