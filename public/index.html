@@ -58,9 +58,13 @@
         </div>
 
         <div id="loading" class="loading">
-          <div class="flex items-center justify-center">
+          <div class="flex items-center justify-center mb-4">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span class="ml-2 text-gray-600">Analyzing stock data...</span>
+            <span class="ml-2 text-gray-600">Starting analysis...</span>
+          </div>
+          <div class="text-sm text-gray-500 text-center">
+            This analysis uses AI to process market data and may take 3-5 minutes to complete.
+            Please keep this tab open.
           </div>
         </div>
 
@@ -93,30 +97,82 @@
     const auth = firebase.auth();
     const analytics = firebase.analytics();
 
+    let ws = null;
+
     const loginBtn = document.getElementById('login-btn');
     const logoutBtn = document.getElementById('logout-btn');
     const authStatus = document.getElementById('auth-status');
     const tickerSection = document.getElementById('ticker-section');
 
+    // Function to establish WebSocket connection
+    function connectWebSocket(token) {
+        if (ws) {
+            ws.close();
+        }
+
+        ws = new WebSocket(`wss://${window.location.host}/ws`);
+        
+        ws.onopen = () => {
+            console.log('WebSocket connected');
+            // Send authentication token
+            ws.send(JSON.stringify({ token }));
+        };
+
+        ws.onmessage = (event) => {
+            const message = JSON.parse(event.data);
+            if (message.type === 'analysis_complete') {
+                document.getElementById('result-content').innerHTML = formatResults(message.data);
+                document.getElementById('result').classList.add('active');
+                document.getElementById('loading').classList.remove('active');
+            } else if (message.type === 'error') {
+                showError(message.message);
+                document.getElementById('loading').classList.remove('active');
+            }
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            showError('Connection error. Please try again.');
+            document.getElementById('loading').classList.remove('active');
+        };
+
+        ws.onclose = () => {
+            console.log('WebSocket disconnected');
+            ws = null;
+        };
+    }
+
+    // Update auth state change handler
     auth.onAuthStateChanged(user => {
-      const authForm = document.getElementById('auth-form');
-      if (user) {
-        authStatus.textContent = `Signed in as ${user.email}`;
-        loginBtn.classList.add('hidden');
-        logoutBtn.classList.remove('hidden');
-        tickerSection.classList.remove('hidden');
-        // Hide the email and password fields
-        document.getElementById('email').value = '';
-        document.getElementById('password').value = '';
-        authForm.classList.add('hidden');
-      } else {
-        authStatus.textContent = 'Please sign in to analyze stocks';
-        loginBtn.classList.remove('hidden');
-        logoutBtn.classList.add('hidden');
-        tickerSection.classList.add('hidden');
-        // Show the auth form
-        authForm.classList.remove('hidden');
-      }
+        const authForm = document.getElementById('auth-form');
+        if (user) {
+            authStatus.textContent = `Signed in as ${user.email}`;
+            loginBtn.classList.add('hidden');
+            logoutBtn.classList.remove('hidden');
+            tickerSection.classList.remove('hidden');
+            // Hide the email and password fields
+            document.getElementById('email').value = '';
+            document.getElementById('password').value = '';
+            authForm.classList.add('hidden');
+            
+            // Connect WebSocket when user signs in
+            user.getIdToken().then(token => {
+                connectWebSocket(token);
+            });
+        } else {
+            authStatus.textContent = 'Please sign in to analyze stocks';
+            loginBtn.classList.remove('hidden');
+            logoutBtn.classList.add('hidden');
+            tickerSection.classList.add('hidden');
+            // Show the auth form
+            authForm.classList.remove('hidden');
+            
+            // Close WebSocket when user signs out
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
     });
 
     loginBtn.onclick = async () => {
@@ -137,7 +193,6 @@
 
     logoutBtn.onclick = () => auth.signOut();
 
-    
     async function analyzeStock() {
       const ticker = document.getElementById('ticker').value.trim().toUpperCase();
       if (!ticker) return showError('Please enter a ticker symbol');
@@ -151,6 +206,9 @@
       document.getElementById('result').classList.remove('active');
       document.getElementById('error').classList.add('hidden');
 
+      const loadingText = document.querySelector('#loading span');
+      loadingText.textContent = 'Starting analysis...';
+
       try {
         analytics.logEvent('analyze_stock', { ticker });
 
@@ -161,20 +219,20 @@
             'Accept': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ ticker }),
+          body: JSON.stringify({ ticker })
         });
 
-        const data = await response.json();
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'An error occurred');
+        }
 
-        if (!response.ok) throw new Error(data.error || 'An error occurred');
-
-        document.getElementById('result-content').innerHTML = formatResults(data);
-        document.getElementById('result').classList.add('active');
+        loadingText.textContent = 'Analysis in progress...';
+        // The WebSocket will handle the result
 
       } catch (error) {
         showError(error.message);
         analytics.logEvent('analyze_stock_error', { ticker, error: error.message });
-      } finally {
         document.getElementById('loading').classList.remove('active');
       }
     }

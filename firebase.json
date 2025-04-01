@@ -23,6 +23,14 @@
     "source": "fintech",
     "runtime": "python312",
     "memory": "1GB",
+    "secretEnv": [      
+      "SERPER_API_KEY",
+      "OPENAI_API_KEY"
+    ],
+    "environmentVariables": {
+      "SERPER_API_KEY": "${SERPER_API_KEY}",
+      "OPENAI_API_KEY": "${OPENAI_API_KEY}"
+    },
     "ignore": [
       "venv/**",
       ".venv/**",
@@ -50,10 +58,6 @@
           "excludes": ["**/venv/**", "**/site-packages/**", "**/lib/**", "**/node_modules/**"]
         }
       }
-    },
-    "environmentVariables": {
-      "SERPER_API_KEY": "${SERPER_API_KEY}",
-      "OPENAI_API_KEY": "${OPENAI_API_KEY}"
     }
   }
 }
