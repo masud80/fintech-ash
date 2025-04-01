@@ -99,16 +99,23 @@
     const tickerSection = document.getElementById('ticker-section');
 
     auth.onAuthStateChanged(user => {
+      const authForm = document.getElementById('auth-form');
       if (user) {
         authStatus.textContent = `Signed in as ${user.email}`;
         loginBtn.classList.add('hidden');
         logoutBtn.classList.remove('hidden');
         tickerSection.classList.remove('hidden');
+        // Hide the email and password fields
+        document.getElementById('email').value = '';
+        document.getElementById('password').value = '';
+        authForm.classList.add('hidden');
       } else {
         authStatus.textContent = 'Please sign in to analyze stocks';
         loginBtn.classList.remove('hidden');
         logoutBtn.classList.add('hidden');
         tickerSection.classList.add('hidden');
+        // Show the auth form
+        authForm.classList.remove('hidden');
       }
     });
 
@@ -186,8 +193,34 @@
         html += '</div>';
       }
       if (data.analysis_summary) {
-        html += `<h3 class="text-lg font-semibold mb-2">Analysis Summary</h3>
-                 <div class="bg-gray-50 p-4 rounded-md">${data.analysis_summary}</div>`;
+        html += `<h3 class="text-lg font-semibold mb-3">Analysis Summary</h3>`;
+        
+        // Split the analysis into sections based on numbering
+        const sections = data.analysis_summary.split(/(?=\d+\.\s+\*\*)/);
+        
+        html += `<div class="space-y-4">`;
+        sections.forEach(section => {
+          if (section.trim()) {
+            // Extract and format risk title
+            const titleMatch = section.match(/\*\*(.*?)\*\*/);
+            const title = titleMatch ? titleMatch[1] : '';
+            
+            // Format the content, replacing ** with proper styling
+            let content = section
+              .replace(/\*\*(.*?)\*\*/g, '<span class="font-semibold">$1</span>')
+              .replace(/\d+\.\s+/, ''); // Remove numbering
+            
+            html += `
+              <div class="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                <div class="grid grid-cols-1 gap-2">
+                  <div class="text-gray-800">
+                    ${content}
+                  </div>
+                </div>
+              </div>`;
+          }
+        });
+        html += '</div>';
       }
       return html;
     }

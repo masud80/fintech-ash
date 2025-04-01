@@ -15,34 +15,12 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-openai_api_key = get_openai_api_key()
-serper_api_key = get_serper_api_key()
 
-# Only set environment variables if they're not already set
-if not os.getenv("OPENAI_API_KEY"):
-    os.environ["OPENAI_API_KEY"] = openai_api_key
-if not os.getenv("OPENAI_MODEL"):
-    os.environ["OPENAI_MODEL"] = 'gpt-4o-mini'
-if not os.getenv("SERPER_API_KEY"):
-    os.environ["SERPER_API_KEY"] = serper_api_key
-
-llm = LLM(
-    model="gpt-4o-mini",
-    temperature=0.7,
-    max_tokens=1000,
-    api_key=openai_api_key
-)
-
-scrape_tool = ScrapeWebsiteTool()
-search_tool = SerperDevTool(
-    name="search",
-    func="Perform a web search",
-    description="Fetches search results from the web",
-    n_results=10  # Set the number of results to fetch
-)
 
 @lru_cache(maxsize=100)
 def get_stock_info(ticker):
+
+    
     """
     Cached function to get stock info with retry logic
     """
@@ -62,6 +40,7 @@ def get_stock_info(ticker):
             else:
                 logger.error(f"Error fetching stock info: {str(e)}")
                 return None
+
 
 def analyze_stock(stock_selection):
     """
@@ -83,6 +62,32 @@ def analyze_stock(stock_selection):
         'Volume': f"{info.get('volume', 'N/A'):,.0f}"
     } 
     """
+
+    openai_api_key = get_openai_api_key()
+    serper_api_key = get_serper_api_key()
+
+    # Only set environment variables if they're not already set
+    if not os.getenv("OPENAI_API_KEY"):
+        os.environ["OPENAI_API_KEY"] = openai_api_key
+    if not os.getenv("OPENAI_MODEL"):
+        os.environ["OPENAI_MODEL"] = 'gpt-4o-mini'
+    if not os.getenv("SERPER_API_KEY"):
+        os.environ["SERPER_API_KEY"] = serper_api_key
+
+    llm = LLM(
+        model="gpt-4o-mini",
+        temperature=0.7,
+        max_tokens=1000,
+        api_key=openai_api_key
+    )
+
+    scrape_tool = ScrapeWebsiteTool()
+    search_tool = SerperDevTool(
+        name="search",
+        func="Perform a web search",
+        description="Fetches search results from the web",
+        n_results=10  # Set the number of results to fetch
+    )
 
     data_analyst_agent = Agent(
         role="Data Analyst",

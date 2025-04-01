@@ -1,8 +1,9 @@
 from firebase_functions import https_fn
 import firebase_admin
-from firebase_admin import credentials, auth, firestore
+from firebase_admin import  auth, firestore
 import json
-
+from firebase_functions.options import MemoryOption
+from financial_analysis import analyze_stock
 # Initialize the Firebase Admin SDK only once
 firebase_admin.initialize_app()
 
@@ -14,7 +15,7 @@ CORS_HEADERS = {
     "Access-Control-Max-Age": "3600"
 }
 
-@https_fn.on_request()
+@https_fn.on_request(memory=MemoryOption.GB_1)
 def analyze_stock_endpoint(req: https_fn.Request) -> https_fn.Response:
     # Handle CORS preflight requests
     if req.method == "OPTIONS":
@@ -52,10 +53,7 @@ def analyze_stock_endpoint(req: https_fn.Request) -> https_fn.Response:
             )
 
         # 🔍 Replace with actual stock analysis logic
-        result = {
-            "financial_metrics": {"P/E Ratio": "18.2", "EPS": "3.70"},
-            "analysis_summary": f"Analysis for stock {ticker} looks promising."
-        }
+        result = analyze_stock(ticker)
 
         # Store in Firestore
         db.collection("previous_analysis").add({

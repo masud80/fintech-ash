@@ -2,39 +2,64 @@
 
 import os
 from dotenv import load_dotenv, find_dotenv
+from firebase_functions import params
 
 # these expect to find a .env file at the directory above the lesson.
 # the format for that file is (without the comment)
 # API_KEYNAME=AStringThatIsTheLongAPIKeyFromSomeService
 
+def is_cloud_environment():
+    """Check if we're running in a Firebase Cloud environment."""
+    return os.getenv('FIREBASE_CONFIG') is not None
+
+def get_secret(secret_name):
+    """Get secret from Firebase Functions params."""
+    if not is_cloud_environment():
+        return None
+    try:
+        return params.SecretParam(secret_name).value
+    except Exception:
+        return None
+
 def load_env():
-    _ = load_dotenv(find_dotenv())
+    if not is_cloud_environment():
+        _ = load_dotenv(find_dotenv())
 
 def get_claude_api_key():
+    # Try Firebase params first
+    claude_api_key = get_secret("CLAUDE_API_KEY")
+    if claude_api_key:
+        return claude_api_key
+        
+    # Fall back to local environment
     load_env()
     claude_api_key = os.getenv("CLAUDE_API_KEY")
     return claude_api_key
 
 def get_openai_api_key():
-    # First try to get from environment variable (for cloud)
+    # Try Firebase params first
+    openai_api_key = get_secret("OPENAI_API_KEY")
+    if openai_api_key:
+        return openai_api_key
+        
+    # Fall back to local environment
+    load_env()
     openai_api_key = os.getenv("OPENAI_API_KEY")
     if not openai_api_key:
-        # If not found, try loading from .env file (for local)
-        load_env()
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-    if not openai_api_key:
-        raise ValueError("OPENAI_API_KEY not found in environment variables or .env file")
+        raise ValueError("OPENAI_API_KEY not found in Firebase params or local environment")
     return openai_api_key
 
 def get_serper_api_key():
-    # First try to get from environment variable (for cloud)
+    # Try Firebase params first
+    serper_api_key = get_secret("SERPER_API_KEY")
+    if serper_api_key:
+        return serper_api_key
+        
+    # Fall back to local environment
+    load_env()
     serper_api_key = os.getenv("SERPER_API_KEY")
     if not serper_api_key:
-        # If not found, try loading from .env file (for local)
-        load_env()
-        serper_api_key = os.getenv("SERPER_API_KEY")
-    if not serper_api_key:
-        raise ValueError("SERPER_API_KEY not found in environment variables or .env file")
+        raise ValueError("SERPER_API_KEY not found in Firebase params or local environment")
     return serper_api_key
 
 # break line every 80 characters if line is longer than 80 characters
