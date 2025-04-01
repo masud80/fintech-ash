@@ -1,9 +1,0 @@
-firebase-functions==0.1.0
-firebase-admin==6.5.0
-openai==1.61.0
-pandas==2.1.4
-requests==2.31.0
-python-dotenv==1.0.1
-crewai==0.108.0
-crewai-tools==0.38.1
-gunicorn==21.2.0 

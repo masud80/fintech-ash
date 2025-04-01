@@ -6,7 +6,7 @@ import json
 from firebase_functions.options import MemoryOption
 from financial_analysis import analyze_stock
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, Any
+from typing import Any
 from datetime import datetime, timedelta
 import concurrent.futures
 

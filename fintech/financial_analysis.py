@@ -284,7 +284,7 @@ def analyze_stock(stock_selection):
     result = financial_trading_crew.kickoff(inputs=financial_trading_inputs)
 
     # Combine quantitative data with analysis
-    result = {
+    final_result = {
         'quantitative_data': {
             'Current Price': f"${stock_data.get('currentPrice', 'N/A')}",
             'Market Cap': f"${stock_data.get('marketCap', 'N/A'):,.0f}" if stock_data.get('marketCap') else 'N/A',
@@ -301,10 +301,10 @@ def analyze_stock(stock_selection):
 
     # Ensure result is a dictionary with analysis_summary key
     if isinstance(result, str):
-        result['analysis_summary'] = result
+        final_result['analysis_summary'] = result
     elif isinstance(result, dict):
-        result['analysis_summary'] = result.get('analysis_summary', result)
+        final_result['analysis_summary'] = result.get('analysis_summary', result)
     else:
-        result['analysis_summary'] = str(result)
+        final_result['analysis_summary'] = str(result)
 
-    return result 
+    return final_result 
