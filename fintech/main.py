@@ -91,3 +91,4 @@ def analyze_stock_endpoint(req: https_fn.Request) -> https_fn.Response:
             status=500,
             headers={**CORS_HEADERS, "Content-Type": "application/json"}
         )
+

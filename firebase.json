@@ -50,6 +50,10 @@
           "excludes": ["**/venv/**", "**/site-packages/**", "**/lib/**", "**/node_modules/**"]
         }
       }
+    },
+    "environmentVariables": {
+      "SERPER_API_KEY": "${SERPER_API_KEY}",
+      "OPENAI_API_KEY": "${OPENAI_API_KEY}"
     }
   }
 }
