@@ -83,8 +83,7 @@ def analyze_stock(stock_selection):
 
     scrape_tool = ScrapeWebsiteTool()
     search_tool = SerperDevTool(
-        name="search",
-        func="Perform a web search",
+        name="search",        
         description="Fetches search results from the web",
         n_results=10  # Set the number of results to fetch
     )
@@ -134,24 +133,28 @@ def analyze_stock(stock_selection):
         description=f"Continuously monitor and analyze market data for {stock_selection}. Use statistical modeling and machine learning to identify trends and predict market movements.",
         expected_output=f"Insights and alerts about significant market opportunities or threats for {stock_selection}.",
         agent=data_analyst_agent,
+        context=[f"Analyzing market data for {stock_selection} to identify trends and opportunities."]
     )
     
     strategy_development_task = Task(
         description=f"Develop and refine trading strategies based on the insights from the Data Analyst and user-defined risk tolerance (Medium). Consider trading preferences (1 year).",
         expected_output=f"A set of potential trading strategies for {stock_selection} that align with the user's risk tolerance.",
         agent=trading_strategy_agent,
+        context=[f"Developing trading strategies for {stock_selection} based on market analysis and risk parameters."]
     )
 
     execution_planning_task = Task(
         description=f"Analyze approved trading strategies to determine the best execution methods for {stock_selection}, considering current market conditions and optimal pricing.",
         expected_output=f"Detailed execution plans suggesting how and when to execute trades for {stock_selection}.",
         agent=execution_agent,
+        context=[f"Planning optimal execution strategies for {stock_selection} trades."]
     )
 
     risk_assessment_task = Task(
         description=f"Evaluate the risks associated with the proposed trading strategies and execution plans for {stock_selection}. Provide a detailed analysis of potential risks and suggest mitigation strategies.",
         expected_output=f"A comprehensive risk analysis report detailing potential risks and mitigation recommendations for {stock_selection}.",
         agent=risk_management_agent,
+        context=[f"Assessing risks and developing mitigation strategies for {stock_selection} trading activities."]
     )
 
     manager_llm = LLM(
