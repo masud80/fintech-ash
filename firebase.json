@@ -8,6 +8,10 @@
     ],
     "rewrites": [
       {
+        "source": "/api/**",
+        "function": "analyze_stock_endpoint"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
@@ -37,7 +41,7 @@
       "**/htmlcov/**"
     ],
     "predeploy": [
-      "pip install -r requirements.txt"
+      "pip install -r fintech/requirements.txt"
     ],
     "build": {
       "excludes": ["**/node_modules/**", "**/venv/**", "**/site-packages/**"],

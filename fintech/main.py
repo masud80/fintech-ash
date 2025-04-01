@@ -1,92 +1,79 @@
-# Welcome to Cloud Functions for Firebase for Python!
-# To get started, simply uncomment the below code or create your own.
-# Deploy with `firebase deploy`
-
-
-
-# initialize_app()
-#
-#
-# @https_fn.on_request()
-# def on_request_example(req: https_fn.Request) -> https_fn.Response:
-#     return https_fn.Response("Hello world!")
-
-# Welcome to Cloud Functions for Firebase for Python!
-# To get started, simply uncomment the below code or create your own.
-# Deploy with `firebase deploy`
-
 from firebase_functions import https_fn
-from firebase_admin import initialize_app, firestore, credentials
+import firebase_admin
+from firebase_admin import credentials, auth, firestore
 import json
-from financial_analysis import analyze_stock
-import os
-import functions_framework
-from flask import Flask, request, jsonify
 
-# Initialize Flask app
-app = Flask(__name__)
+# Initialize the Firebase Admin SDK only once
+firebase_admin.initialize_app()
 
-# Initialize Firebase Admin with service account credentials
-try:
-    cred = credentials.Certificate('../serviceAccountKey.json')
-    initialize_app(cred)
-except ValueError:
-    # App already initialized
-    pass
+# CORS headers
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "https://fintech-ash-80b97.web.app",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Max-Age": "3600"
+}
 
-db = firestore.client()
+@https_fn.on_request()
+def analyze_stock_endpoint(req: https_fn.Request) -> https_fn.Response:
+    # Handle CORS preflight requests
+    if req.method == "OPTIONS":
+        return https_fn.Response(
+            "",
+            status=204,
+            headers=CORS_HEADERS
+        )
 
-@functions_framework.http
-def analyze_stock_endpoint(request):
-    # Enable CORS
-    if request.method == 'OPTIONS':
-        headers = {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'POST',
-            'Access-Control-Allow-Headers': 'Content-Type, Accept'
-        }
-        return ('', 204, headers)
-
-    # Handle the actual request
     try:
-        # Get the request data
-        request_json = request.get_json()
-        ticker = request_json.get('ticker')
+        # 🔐 Verify Firebase ID token from Authorization header
+        auth_header = req.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return https_fn.Response(
+                json.dumps({"error": "Unauthorized"}),
+                status=401,
+                headers={**CORS_HEADERS, "Content-Type": "application/json"}
+            )
+        
+        id_token = auth_header.split("Bearer ")[1]
+        decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token["uid"]
 
+        # 🔁 Move Firestore client inside the handler
+        db = firestore.client()
+
+        # Parse and validate the incoming request
+        body = req.get_json(silent=True)
+        ticker = body.get("ticker") if body else None
         if not ticker:
-            return (json.dumps({'error': 'Please provide a ticker symbol'}), 400, {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            })
+            return https_fn.Response(
+                json.dumps({"error": "Ticker is required"}),
+                status=400,
+                headers={**CORS_HEADERS, "Content-Type": "application/json"}
+            )
 
-        # Analyze the stock
-        result = analyze_stock(ticker)
+        # 🔍 Replace with actual stock analysis logic
+        result = {
+            "financial_metrics": {"P/E Ratio": "18.2", "EPS": "3.70"},
+            "analysis_summary": f"Analysis for stock {ticker} looks promising."
+        }
 
         # Store in Firestore
-        db.collection('stock_analysis').add({
-            'ticker': ticker,
-            'result': result,
-            'timestamp': firestore.SERVER_TIMESTAMP
+        db.collection("previous_analysis").add({
+            "user_id": uid,
+            "ticker": ticker,
+            "result": result,
+            "timestamp": firestore.SERVER_TIMESTAMP
         })
 
-        return (json.dumps(result), 200, {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-        })
+        return https_fn.Response(
+            json.dumps(result),
+            status=200,
+            headers={**CORS_HEADERS, "Content-Type": "application/json"}
+        )
 
     except Exception as e:
-        return (json.dumps({'error': str(e)}), 500, {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-        })
-
-# This is for local testing
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port)
-
-#
-#
-# @https_fn.on_request()
-# def on_request_example(req: https_fn.Request) -> https_fn.Response:
-#     return https_fn.Response("Hello world!")
+        return https_fn.Response(
+            json.dumps({"error": str(e)}),
+            status=500,
+            headers={**CORS_HEADERS, "Content-Type": "application/json"}
+        )

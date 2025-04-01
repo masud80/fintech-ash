@@ -1,9 +1,9 @@
 firebase-functions==0.1.0
-firebase-admin==6.4.0
-functions-framework==3.*
-openai
-pandas
+firebase-admin==6.5.0
+openai==1.61.0
+pandas==2.1.4
 yfinance==0.2.36
 python-dotenv==1.0.1
 crewai==0.108.0
-crewai-tools
+crewai-tools==0.38.1
+gunicorn==21.2.0

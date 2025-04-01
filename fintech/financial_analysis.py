@@ -18,9 +18,13 @@ logger = logging.getLogger(__name__)
 openai_api_key = get_openai_api_key()
 serper_api_key = get_serper_api_key()
 
-os.environ["OPENAI_API_KEY"] = openai_api_key
-os.environ["OPENAI_MODEL"] = 'gpt-4o-mini'
-os.environ["SERPER_API_KEY"] = serper_api_key
+# Only set environment variables if they're not already set
+if not os.getenv("OPENAI_API_KEY"):
+    os.environ["OPENAI_API_KEY"] = openai_api_key
+if not os.getenv("OPENAI_MODEL"):
+    os.environ["OPENAI_MODEL"] = 'gpt-4o-mini'
+if not os.getenv("SERPER_API_KEY"):
+    os.environ["SERPER_API_KEY"] = serper_api_key
 
 llm = LLM(
     model="gpt-4o-mini",

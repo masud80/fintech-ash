@@ -95,9 +95,6 @@ wheels/
 .env.local
 .env.*.local
 
-# Firebase
-serviceAccountKey.json
-
 # IDE
 .idea/
 .vscode/
@@ -110,3 +107,6 @@ Thumbs.db
 venv
 /fintech/venv
 /.ipynb_checkpoints
+
+# Firebase service account key
+serviceAccountKey.json
