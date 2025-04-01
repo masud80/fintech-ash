@@ -62,23 +62,29 @@ function listenForAnalysisUpdates(documentId) {
 
 // Update auth state change handler
 auth.onAuthStateChanged(user => {
+    console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
     const authForm = document.getElementById('auth-form');
+    const loginBtn = document.getElementById('login-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const tickerSection = document.getElementById('ticker-section');
+    
     if (user) {
+        console.log('User email:', user.email);
         authStatus.textContent = `Signed in as ${user.email}`;
         loginBtn.classList.add('hidden');
         logoutBtn.classList.remove('hidden');
+        authForm.classList.add('hidden');
         tickerSection.classList.remove('hidden');
         // Hide the email and password fields
         document.getElementById('email').value = '';
         document.getElementById('password').value = '';
-        authForm.classList.add('hidden');
     } else {
+        console.log('No user signed in');
         authStatus.textContent = 'Please sign in to analyze stocks';
         loginBtn.classList.remove('hidden');
         logoutBtn.classList.add('hidden');
-        tickerSection.classList.add('hidden');
-        // Show the auth form
         authForm.classList.remove('hidden');
+        tickerSection.classList.add('hidden');
         
         // Clean up any existing listener
         if (currentAnalysisListener) {
@@ -169,14 +175,19 @@ async function analyzeStock() {
 function formatResults(data) {
     let html = '<div class="results-container">';
     
+    // Clear previous visualizations
+    document.getElementById('visualizations').innerHTML = '';
+    
     if (data.financial_metrics) {
+        // Create visualizations for financial metrics
+        createFinancialVisualizations(data.financial_metrics);
+        
         html += `
             <div class="results-section">
                 <h3 class="results-section-title">Financial Metrics</h3>
                 <div class="metrics-grid">`;
         
         for (const [key, value] of Object.entries(data.financial_metrics)) {
-            // Determine if the metric is positive, negative, or neutral
             let metricClass = 'neutral-metric';
             if (typeof value === 'string' && value.includes('%')) {
                 const numericValue = parseFloat(value);
@@ -199,19 +210,16 @@ function formatResults(data) {
                 <h3 class="results-section-title">Analysis Summary</h3>
                 <div class="analysis-content">`;
         
-        // Split the analysis into sections based on numbering
         const sections = data.analysis_summary.split(/(?=\d+\.\s+\*\*)/);
         
         sections.forEach(section => {
             if (section.trim()) {
-                // Extract and format risk title
                 const titleMatch = section.match(/\*\*(.*?)\*\*/);
                 const title = titleMatch ? titleMatch[1] : '';
                 
-                // Format the content, replacing ** with proper styling
                 let content = section
                     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/\d+\.\s+/, ''); // Remove numbering
+                    .replace(/\d+\.\s+/, '');
                 
                 html += `
                     <div class="analysis-card">
@@ -224,6 +232,88 @@ function formatResults(data) {
     
     html += '</div>';
     return html;
+}
+
+function createFinancialVisualizations(metrics) {
+    const visualizationsContainer = document.getElementById('visualizations');
+    
+    // Create a gauge chart for key metrics
+    const gaugeChart = document.createElement('canvas');
+    gaugeChart.id = 'gaugeChart';
+    visualizationsContainer.appendChild(gaugeChart);
+    
+    const gaugeCtx = gaugeChart.getContext('2d');
+    new Chart(gaugeCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Positive', 'Negative'],
+            datasets: [{
+                data: [70, 30],
+                backgroundColor: ['#10B981', '#EF4444'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '80%',
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+
+    // Create a bar chart for comparing metrics
+    const barChart = document.createElement('canvas');
+    barChart.id = 'barChart';
+    visualizationsContainer.appendChild(barChart);
+    
+    const barCtx = barChart.getContext('2d');
+    const metricData = Object.entries(metrics)
+        .filter(([_, value]) => typeof value === 'string' && value.includes('%'))
+        .map(([key, value]) => ({
+            label: key,
+            value: parseFloat(value)
+        }));
+
+    new Chart(barCtx, {
+        type: 'bar',
+        data: {
+            labels: metricData.map(d => d.label),
+            datasets: [{
+                label: 'Percentage Values',
+                data: metricData.map(d => d.value),
+                backgroundColor: metricData.map(d => 
+                    d.value > 0 ? '#10B981' : d.value < 0 ? '#EF4444' : '#6B7280'
+                ),
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        display: false
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
 }
 
 function showError(message) {

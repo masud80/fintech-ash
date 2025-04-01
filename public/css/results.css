@@ -29,28 +29,24 @@
 }
 
 .metric-card {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 1.25rem;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    background: white;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease-in-out;
 }
 
 .metric-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
 .metric-label {
-    color: #64748b;
     font-size: 0.875rem;
+    color: #6B7280;
     margin-bottom: 0.5rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
 }
 
 .metric-value {
-    color: #1e293b;
     font-size: 1.25rem;
     font-weight: 600;
 }
@@ -81,15 +77,15 @@
 }
 
 .positive-metric {
-    color: #059669;
+    color: #10B981;
 }
 
 .negative-metric {
-    color: #dc2626;
+    color: #EF4444;
 }
 
 .neutral-metric {
-    color: #6b7280;
+    color: #6B7280;
 }
 
 /* Loading state styling */
@@ -131,4 +127,19 @@
     .metric-card {
         padding: 1rem;
     }
+}
+
+/* Visualization styles */
+#visualizations {
+    margin-bottom: 2rem;
+}
+
+#visualizations canvas {
+    width: 100% !important;
+    height: 300px !important;
+    margin-bottom: 1rem;
+    background: white;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 } 
