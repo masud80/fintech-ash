@@ -1,15 +1,15 @@
 .results-container {
-    max-width: 1200px;
+    max-width: 95%;
     margin: 0 auto;
-    padding: 2rem;
+    padding: 1rem;
 }
 
 .results-section {
     background: #ffffff;
     border-radius: 12px;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    margin-bottom: 2rem;
-    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding: 1.25rem;
 }
 
 .results-section-title {
@@ -23,9 +23,9 @@
 
 .metrics-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1.25rem;
-    margin-bottom: 2rem;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
 }
 
 .metric-card {
@@ -34,6 +34,8 @@
     padding: 1rem;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     transition: transform 0.2s ease-in-out;
+    position: relative;
+    cursor: help;
 }
 
 .metric-card:hover {
@@ -71,9 +73,63 @@
     font-size: 1rem;
 }
 
-.analysis-content strong {
+.analysis-content h1,
+.analysis-content h2,
+.analysis-content h3,
+.analysis-content h4,
+.analysis-content h5,
+.analysis-content h6 {
     color: #1e293b;
     font-weight: 600;
+    margin-top: 1.5em;
+    margin-bottom: 0.75em;
+}
+
+.analysis-content h1 { font-size: 2em; }
+.analysis-content h2 { font-size: 1.75em; }
+.analysis-content h3 { font-size: 1.5em; }
+.analysis-content h4 { font-size: 1.25em; }
+.analysis-content h5 { font-size: 1.1em; }
+.analysis-content h6 { font-size: 1em; }
+
+.analysis-content p {
+    margin-bottom: 1em;
+}
+
+.analysis-content ul {
+    list-style-type: disc;
+    margin-left: 1.5em;
+    margin-bottom: 1em;
+}
+
+.analysis-content li {
+    margin-bottom: 0.5em;
+}
+
+.analysis-content .component-list {
+    margin-left: 1.5em;
+    margin-bottom: 1.5em;
+}
+
+.analysis-content .component-item {
+    margin-bottom: 0.5em;
+    position: relative;
+}
+
+.analysis-content .component-item::before {
+    content: "•";
+    position: absolute;
+    left: -1em;
+    color: #6B7280;
+}
+
+.analysis-content pre {
+    background: #f8fafc;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    margin-bottom: 1em;
+    font-family: monospace;
 }
 
 .positive-metric {
@@ -131,15 +187,294 @@
 
 /* Visualization styles */
 #visualizations {
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 1rem;
 }
 
-#visualizations canvas {
-    width: 100% !important;
-    height: 300px !important;
-    margin-bottom: 1rem;
+#visualizations > div {
+    min-height: 300px;
     background: white;
     border-radius: 0.5rem;
     padding: 1rem;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Analysis Summary Styles */
+.main-strategy-section {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background: #f8fafc;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.main-strategy-title {
+    color: #1e293b;
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.strategy-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    transition: all 0.2s ease;
+    overflow: hidden;
+}
+
+.strategy-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.strategy-header {
+    background: #f1f5f9;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.strategy-title {
+    color: #0f172a;
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.strategy-content {
+    padding: 1.5rem;
+}
+
+.strategy-section {
+    padding: 1rem;
+    margin-bottom: 1rem;
+    background: #f8fafc;
+    border-radius: 0.5rem;
+    border-left: 4px solid;
+}
+
+.strategy-section:last-child {
+    margin-bottom: 0;
+}
+
+/* Section-specific colors */
+.strategy-section:nth-child(1) {
+    border-left-color: #3b82f6; /* Blue for Overview */
+}
+
+.strategy-section:nth-child(2) {
+    border-left-color: #ef4444; /* Red for Risks */
+}
+
+.strategy-section:nth-child(3) {
+    border-left-color: #10b981; /* Green for Mitigation */
+}
+
+.section-title {
+    color: #1e293b;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0 0 0.75rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.section-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.section-item {
+    position: relative;
+    padding-left: 1.5rem;
+    margin-bottom: 0.5rem;
+    color: #334155;
+    line-height: 1.5;
+}
+
+.section-item:before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.6em;
+    height: 6px;
+    width: 6px;
+    border-radius: 50%;
+    background-color: #64748b;
+}
+
+.section-item:last-child {
+    margin-bottom: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .strategy-card {
+        margin-bottom: 1rem;
+    }
+    
+    .strategy-header {
+        padding: 0.75rem 1rem;
+    }
+    
+    .strategy-content {
+        padding: 1rem;
+    }
+    
+    .strategy-section {
+        padding: 0.75rem;
+    }
+    
+    .strategy-title {
+        font-size: 1.125rem;
+    }
+    
+    .section-title {
+        font-size: 1rem;
+    }
+}
+
+/* Auth Status Bar */
+.bg-gray-50 {
+    position: sticky;
+    top: 0;
+    z-index: 9;
+    backdrop-filter: blur(8px);
+    background-color: rgba(249, 250, 251, 0.95);
+}
+
+#auth-status {
+    font-weight: 500;
+    padding: 0.25rem 0;
+    color: #4B5563;
+}
+
+#header-logout-btn {
+    padding: 0.25rem 0;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    outline: none;
+}
+
+#header-logout-btn:hover {
+    transform: translateY(-1px);
+}
+
+#header-logout-btn:active {
+    transform: translateY(0);
+}
+
+/* Update main content margin to account for status bar */
+.main-content {
+    margin-left: 250px;
+}
+
+@media (max-width: 768px) {
+    .main-content {
+        margin-left: 0;
+    }
+    
+    .bg-gray-50 {
+        padding-left: 3rem; /* Make room for mobile menu button */
+    }
+}
+
+.conclusion-section {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-top: 2rem;
+    position: relative;
+    border-left: 4px solid #8b5cf6; /* Purple for conclusion */
+}
+
+.conclusion-title {
+    color: #1e293b;
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 1rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.conclusion-content {
+    color: #334155;
+    line-height: 1.6;
+    font-size: 1rem;
+    white-space: pre-line;
+}
+
+/* Responsive adjustments for conclusion */
+@media (max-width: 768px) {
+    .conclusion-section {
+        padding: 1rem;
+        margin-top: 1.5rem;
+    }
+    
+    .conclusion-title {
+        font-size: 1.125rem;
+    }
+}
+
+/* Add tooltip styles */
+.metric-card[data-tooltip]:before {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.5rem 1rem;
+    background-color: rgba(17, 24, 39, 0.9);
+    color: white;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    white-space: normal;
+    max-width: 300px;
+    width: max-content;
+    text-align: center;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    z-index: 50;
+    pointer-events: none;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Add arrow for tooltip */
+.metric-card[data-tooltip]:after {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 6px;
+    border-style: solid;
+    border-color: rgba(17, 24, 39, 0.9) transparent transparent transparent;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    pointer-events: none;
+}
+
+/* Show tooltip on hover */
+.metric-card[data-tooltip]:hover:before,
+.metric-card[data-tooltip]:hover:after {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Responsive adjustments for tooltips */
+@media (max-width: 768px) {
+    .metric-card[data-tooltip]:before {
+        max-width: 250px;
+        font-size: 0.75rem;
+        padding: 0.375rem 0.75rem;
+    }
 } 

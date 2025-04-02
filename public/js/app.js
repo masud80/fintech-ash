@@ -17,9 +17,114 @@ const db = firebase.firestore();
 
 let currentAnalysisListener = null;
 
+// Ticker List Functionality
+const NASDAQ_TICKERS = [
+    { symbol: 'AAPL', name: 'Apple Inc.' },
+    { symbol: 'MSFT', name: 'Microsoft Corporation' },
+    { symbol: 'GOOGL', name: 'Alphabet Inc.' },
+    { symbol: 'AMZN', name: 'Amazon.com Inc.' },
+    { symbol: 'NVDA', name: 'NVIDIA Corporation' },
+    { symbol: 'META', name: 'Meta Platforms Inc.' },
+    { symbol: 'TSLA', name: 'Tesla Inc.' },
+    { symbol: 'NFLX', name: 'Netflix Inc.' },
+    { symbol: 'AMD', name: 'Advanced Micro Devices.' },
+    { symbol: 'INTC', name: 'Intel Corporation' },
+    // Add more tickers as needed
+];
+
+// Update the METRIC_DEFINITIONS to match the exact keys we receive
+const METRIC_DEFINITIONS = {
+    'Current Price': 'The current market price of the stock.',
+    'Market Cap': 'Total value of all outstanding shares of the company.',
+    'Forward P/E': 'Forward Price-to-Earnings ratio, comparing current share price to predicted earnings per share.',
+    'Trailing P/E': 'Trailing Price-to-Earnings ratio, comparing current share price to historical earnings per share.',
+    'Dividend Yield': 'Annual dividend payments as a percentage of the stock price.',
+    'Beta': 'Measure of stock\'s volatility compared to the overall market. Beta > 1 means more volatile than market.',
+    '52 Week High': 'Highest price of the stock over the past 52 weeks.',
+    '52 Week Low': 'Lowest price of the stock over the past 52 weeks.',
+    'Volume': 'Number of shares traded during the current session.',
+    'Average Volume': 'Average number of shares traded daily.',
+    'Return on Equity': 'Net income as a percentage of shareholder equity, measuring profitability.',
+    'Profit Margins': 'Net profit as a percentage of revenue, indicating profit efficiency.',
+    'Revenue Growth': 'Year-over-year increase in company\'s revenue.',
+    'Debt to Equity': 'Total debt relative to equity, measuring financial leverage.',
+    'Quick Ratio': 'Liquid assets relative to liabilities, measuring short-term solvency.',
+    'Current Ratio': 'Current assets relative to current liabilities, measuring short-term solvency.',
+    'SMA50': '50-day Simple Moving Average, average closing price over last 50 trading days.',
+    'SMA200': '200-day Simple Moving Average, average closing price over last 200 trading days.',
+    'RSI': 'Relative Strength Index, momentum indicator measuring speed and magnitude of price changes.',
+    'Volatility': 'Statistical measure of stock price variation over time, annualized.',
+    'Industry': 'The business sector in which the company operates.',
+    'Full Time Employees': 'Total number of full-time employees in the company.',
+    'Recommendation': 'Analyst consensus recommendation for the stock.'
+};
+
+// Initialize ticker list
+function initializeTickerList() {
+    const tickerList = document.getElementById('ticker-list');
+    const tickerSearch = document.getElementById('ticker-search');
+    const togglePanel = document.querySelector('.toggle-panel');
+    const tickerPanel = document.querySelector('.ticker-list-panel');
+
+    // Populate initial list
+    renderTickerList(NASDAQ_TICKERS);
+
+    // Search functionality
+    tickerSearch.addEventListener('input', (e) => {
+        const searchTerm = e.target.value.toLowerCase();
+        const filteredTickers = NASDAQ_TICKERS.filter(ticker => 
+            ticker.symbol.toLowerCase().includes(searchTerm) || 
+            ticker.name.toLowerCase().includes(searchTerm)
+        );
+        renderTickerList(filteredTickers);
+    });
+
+    // Mobile toggle functionality
+    togglePanel?.addEventListener('click', () => {
+        tickerPanel.classList.toggle('active');
+    });
+
+    // Close panel when clicking outside on mobile
+    document.addEventListener('click', (e) => {
+        if (window.innerWidth <= 768 && 
+            !tickerPanel.contains(e.target) && 
+            !togglePanel.contains(e.target)) {
+            tickerPanel.classList.remove('active');
+        }
+    });
+}
+
+// Render ticker list
+function renderTickerList(tickers) {
+    const tickerList = document.getElementById('ticker-list');
+    tickerList.innerHTML = tickers.map(ticker => `
+        <div class="ticker-item" onclick="selectTicker('${ticker.symbol}')">
+            <span class="ticker-symbol">${ticker.symbol}</span>
+            <span class="ticker-name">${ticker.name}</span>
+        </div>
+    `).join('');
+}
+
+// Select ticker
+function selectTicker(symbol) {
+    const tickerInput = document.getElementById('ticker');
+    tickerInput.value = symbol;
+    
+    // Close panel on mobile after selection
+    if (window.innerWidth <= 768) {
+        document.querySelector('.ticker-list-panel').classList.remove('active');
+    }
+}
+
+// Initialize ticker list when DOM is loaded
+document.addEventListener('DOMContentLoaded', initializeTickerList);
+
+// Make selectTicker function available globally
+window.selectTicker = selectTicker;
+
 // DOM Elements
 const loginBtn = document.getElementById('login-btn');
-const logoutBtn = document.getElementById('logout-btn');
+const headerLogoutBtn = document.getElementById('header-logout-btn');
 const authStatus = document.getElementById('auth-status');
 const tickerSection = document.getElementById('ticker-section');
 
@@ -65,14 +170,14 @@ auth.onAuthStateChanged(user => {
     console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
     const authForm = document.getElementById('auth-form');
     const loginBtn = document.getElementById('login-btn');
-    const logoutBtn = document.getElementById('logout-btn');
+    const headerLogoutBtn = document.getElementById('header-logout-btn');
     const tickerSection = document.getElementById('ticker-section');
     
     if (user) {
         console.log('User email:', user.email);
         authStatus.textContent = `Signed in as ${user.email}`;
         loginBtn.classList.add('hidden');
-        logoutBtn.classList.remove('hidden');
+        headerLogoutBtn.classList.remove('hidden');
         authForm.classList.add('hidden');
         tickerSection.classList.remove('hidden');
         // Hide the email and password fields
@@ -82,7 +187,7 @@ auth.onAuthStateChanged(user => {
         console.log('No user signed in');
         authStatus.textContent = 'Please sign in to analyze stocks';
         loginBtn.classList.remove('hidden');
-        logoutBtn.classList.add('hidden');
+        headerLogoutBtn.classList.add('hidden');
         authForm.classList.remove('hidden');
         tickerSection.classList.add('hidden');
         
@@ -110,7 +215,7 @@ loginBtn.onclick = async () => {
     }
 };
 
-logoutBtn.onclick = () => auth.signOut();
+headerLogoutBtn.onclick = () => auth.signOut();
 
 async function analyzeStock() {
     const ticker = document.getElementById('ticker').value.trim().toUpperCase();
@@ -172,6 +277,33 @@ async function analyzeStock() {
     }
 }
 
+// Update the getMetricKey function
+function getMetricKey(key) {
+    // First try direct match
+    if (METRIC_DEFINITIONS[key]) {
+        return key;
+    }
+    
+    // Try common variations
+    const variations = {
+        'Market Cap (B)': 'Market Cap',
+        'Market Cap (M)': 'Market Cap',
+        'Forward PE': 'Forward P/E',
+        'Trailing PE': 'Trailing P/E',
+        'Dividend Yield (%)': 'Dividend Yield',
+        '52-Week High': '52 Week High',
+        '52-Week Low': '52 Week Low',
+        'Avg Volume': 'Average Volume',
+        'ROE': 'Return on Equity',
+        'Debt/Equity': 'Debt to Equity',
+        'Employees': 'Full Time Employees',
+        'Recommendation Key': 'Recommendation'
+    };
+
+    return variations[key] || key;
+}
+
+// Modify the metric card creation part in formatResults
 function formatResults(data) {
     let html = '<div class="results-container">';
     
@@ -195,8 +327,15 @@ function formatResults(data) {
                 if (numericValue < 0) metricClass = 'negative-metric';
             }
             
+            // Get the definition using the helper function
+            const metricKey = getMetricKey(key);
+            const definition = METRIC_DEFINITIONS[metricKey] || `No definition available for ${key}`;
+            
+            // Add debug console log
+            console.log(`Original key: ${key}, Mapped key: ${metricKey}, Has definition: ${!!METRIC_DEFINITIONS[metricKey]}`);
+            
             html += `
-                <div class="metric-card">
+                <div class="metric-card" data-tooltip="${definition}">
                     <div class="metric-label">${key}</div>
                     <div class="metric-value ${metricClass}">${value}</div>
                 </div>`;
@@ -209,24 +348,78 @@ function formatResults(data) {
             <div class="results-section">
                 <h3 class="results-section-title">Analysis Summary</h3>
                 <div class="analysis-content">`;
+
+        if (typeof data.analysis_summary === 'string') {
+            // Split the content into strategies and conclusion
+            const parts = data.analysis_summary.split(/(?=###\s*Conclusion|(?=\d+\.\s+[^*]+Strategy))/);
+            
+            // Process strategies
+            parts.forEach(part => {
+                if (!part.trim()) return;
+
+                if (part.includes('Conclusion')) {
+                    // Handle conclusion section
+                    const conclusionContent = part.replace(/###\s*Conclusion/, '').trim();
+                    html += `
+                        <div class="conclusion-section">
+                            <h4 class="conclusion-title">Conclusion</h4>
+                            <div class="conclusion-content">
+                                ${conclusionContent}
+                            </div>
+                        </div>`;
+                } else {
+                    // Handle strategy section
+                    const titleMatch = part.match(/\d+\.\s+([^*\n]+)/);
+                    const title = titleMatch ? titleMatch[1] : 'Strategy';
+
+                    // Extract sections using ** markers
+                    const sections = {
+                        'Overview': part.match(/\*\*Overview\*\*:\s*([^*]+)(?=\*\*|$)/),
+                        'Risks': part.match(/\*\*Risks\*\*:\s*([^*]+)(?=\*\*|$)/),
+                        'Mitigation Strategies': part.match(/\*\*Mitigation Strategies\*\*:\s*([^*]+)(?=###|$)/)
+                    };
+
+                    html += `
+                        <div class="strategy-card">
+                            <div class="strategy-header">
+                                <h4 class="strategy-title">${title}</h4>
+                            </div>
+                            <div class="strategy-content">`;
+
+                    // Add each section
+                    for (const [sectionTitle, match] of Object.entries(sections)) {
+                        if (match && match[1]) {
+                            const content = match[1].trim();
+                            const points = content.split('-').filter(point => point.trim());
+                            
+                            html += `
+                                <div class="strategy-section">
+                                    <h5 class="section-title">${sectionTitle}</h5>
+                                    <ul class="section-list">`;
+                                    
+                            points.forEach(point => {
+                                if (point.trim()) {
+                                    html += `<li class="section-item">${point.trim()}</li>`;
+                                }
+                            });
+                            
+                            html += `
+                                    </ul>
+                                </div>`;
+                        }
+                    }
+
+                    html += `
+                            </div>
+                        </div>`;
+                }
+            });
+        } else {
+            // Handle structured data
+            const content = JSON.stringify(data.analysis_summary, null, 2);
+            html += `<pre class="whitespace-pre-wrap">${content}</pre>`;
+        }
         
-        const sections = data.analysis_summary.split(/(?=\d+\.\s+\*\*)/);
-        
-        sections.forEach(section => {
-            if (section.trim()) {
-                const titleMatch = section.match(/\*\*(.*?)\*\*/);
-                const title = titleMatch ? titleMatch[1] : '';
-                
-                let content = section
-                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/\d+\.\s+/, '');
-                
-                html += `
-                    <div class="analysis-card">
-                        ${content}
-                    </div>`;
-            }
-        });
         html += '</div></div>';
     }
     
@@ -265,33 +458,65 @@ function createFinancialVisualizations(metrics) {
     };
 
     if (hasValidData(profitabilityData)) {
-        const gaugeChart = document.createElement('canvas');
+        const gaugeChart = document.createElement('div');
         gaugeChart.id = 'gaugeChart';
+        gaugeChart.style.height = '300px';
         visualizationsContainer.appendChild(gaugeChart);
         
-        new Chart(gaugeChart.getContext('2d'), {
-            type: 'doughnut',
-            data: {
-                labels: Object.keys(profitabilityData).filter(key => profitabilityData[key] !== null),
-                datasets: [{
-                    data: Object.values(profitabilityData).filter(val => val !== null),
-                    backgroundColor: ['#10B981', '#3B82F6'],
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '80%',
-                plugins: {
-                    legend: { position: 'bottom' },
-                    title: {
-                        display: true,
-                        text: 'Profitability Metrics (%)'
+        const options = {
+            series: Object.values(profitabilityData).filter(val => val !== null),
+            chart: {
+                type: 'radialBar',
+                height: 300,
+                animations: {
+                    enabled: true,
+                    easing: 'easeinout',
+                    speed: 800,
+                    animateGradually: {
+                        enabled: true,
+                        delay: 150
+                    },
+                    dynamicAnimation: {
+                        enabled: true,
+                        speed: 350
                     }
                 }
+            },
+            plotOptions: {
+                radialBar: {
+                    hollow: {
+                        size: '70%',
+                        margin: 0
+                    },
+                    track: {
+                        strokeWidth: '67%',
+                        background: '#f2f2f2'
+                    },
+                    dataLabels: {
+                        name: {
+                            offsetY: -10,
+                            color: '#888',
+                            fontSize: '13px'
+                        },
+                        value: {
+                            color: '#111',
+                            fontSize: '30px',
+                            show: true,
+                            formatter: function (val) {
+                                return val + '%';
+                            }
+                        }
+                    }
+                }
+            },
+            labels: Object.keys(profitabilityData).filter(key => profitabilityData[key] !== null),
+            colors: ['#10B981', '#3B82F6'],
+            stroke: {
+                lineCap: 'round'
             }
-        });
+        };
+
+        new ApexCharts(gaugeChart, options).render();
     }
 
     // Prepare technical data
@@ -302,45 +527,83 @@ function createFinancialVisualizations(metrics) {
     };
 
     if (hasValidData(technicalData)) {
-        const barChart = document.createElement('canvas');
+        const barChart = document.createElement('div');
         barChart.id = 'barChart';
+        barChart.style.height = '300px';
         visualizationsContainer.appendChild(barChart);
         
         const validLabels = Object.keys(technicalData).filter(key => technicalData[key] !== null);
         const validData = validLabels.map(label => technicalData[label]);
 
-        new Chart(barChart.getContext('2d'), {
-            type: 'bar',
-            data: {
-                labels: validLabels,
-                datasets: [{
-                    label: 'Technical Indicators',
-                    data: validData,
-                    backgroundColor: validLabels.map((_, i) => 
-                        ['#10B981', '#3B82F6', '#EF4444'][i % 3]
-                    ),
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    title: {
-                        display: true,
-                        text: 'Technical Analysis Metrics'
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: { display: false }
+        const options = {
+            series: [{
+                name: 'Technical Indicators',
+                data: validData
+            }],
+            chart: {
+                type: 'bar',
+                height: 300,
+                animations: {
+                    enabled: true,
+                    easing: 'easeinout',
+                    speed: 800,
+                    animateGradually: {
+                        enabled: true,
+                        delay: 150
                     },
-                    x: { grid: { display: false } }
+                    dynamicAnimation: {
+                        enabled: true,
+                        speed: 350
+                    }
+                }
+            },
+            plotOptions: {
+                bar: {
+                    borderRadius: 4,
+                    horizontal: false,
+                    columnWidth: '40%',
+                    distributed: true,
+                    dataLabels: {
+                        position: 'top'
+                    },
+                    colors: {
+                        ranges: [{
+                            from: 0,
+                            to: 100,
+                            color: '#10B981'
+                        }]
+                    }
+                }
+            },
+            dataLabels: {
+                enabled: true,
+                formatter: function (val) {
+                    return val.toFixed(2);
+                }
+            },
+            xaxis: {
+                categories: validLabels,
+                labels: {
+                    style: {
+                        colors: '#888'
+                    }
+                }
+            },
+            yaxis: {
+                title: {
+                    text: 'Value'
+                }
+            },
+            tooltip: {
+                y: {
+                    formatter: function (val) {
+                        return val.toFixed(2);
+                    }
                 }
             }
-        });
+        };
+
+        new ApexCharts(barChart, options).render();
     }
 
     // Prepare price data
@@ -351,45 +614,92 @@ function createFinancialVisualizations(metrics) {
     };
 
     if (hasValidData(priceData)) {
-        const lineChart = document.createElement('canvas');
+        const lineChart = document.createElement('div');
         lineChart.id = 'lineChart';
+        lineChart.style.height = '300px';
         visualizationsContainer.appendChild(lineChart);
         
         const validLabels = Object.keys(priceData).filter(key => priceData[key] !== null);
         const validData = validLabels.map(label => priceData[label]);
 
-        new Chart(lineChart.getContext('2d'), {
-            type: 'line',
-            data: {
-                labels: validLabels,
-                datasets: [{
-                    label: 'Price Indicators ($)',
-                    data: validData,
-                    borderColor: '#10B981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    tension: 0.4,
-                    fill: true
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    title: {
-                        display: true,
-                        text: 'Price Analysis'
+        const options = {
+            series: [{
+                name: 'Price Indicators ($)',
+                data: validData
+            }],
+            chart: {
+                type: 'line',
+                height: 300,
+                animations: {
+                    enabled: true,
+                    easing: 'easeinout',
+                    speed: 800,
+                    animateGradually: {
+                        enabled: true,
+                        delay: 150
+                    },
+                    dynamicAnimation: {
+                        enabled: true,
+                        speed: 350
                     }
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: { display: false }
-                    },
-                    x: { grid: { display: false } }
+                toolbar: {
+                    show: true
+                }
+            },
+            stroke: {
+                curve: 'smooth',
+                width: 3
+            },
+            grid: {
+                borderColor: '#f1f1f1',
+                padding: {
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    left: 0
+                }
+            },
+            xaxis: {
+                categories: validLabels,
+                labels: {
+                    style: {
+                        colors: '#888'
+                    }
+                }
+            },
+            yaxis: {
+                title: {
+                    text: 'Price ($)'
+                }
+            },
+            markers: {
+                size: 5,
+                colors: '#10B981',
+                strokeWidth: 0,
+                hover: {
+                    size: 7
+                }
+            },
+            fill: {
+                type: 'gradient',
+                gradient: {
+                    shadeIntensity: 1,
+                    opacityFrom: 0.7,
+                    opacityTo: 0.9,
+                    stops: [0, 90, 100]
+                }
+            },
+            tooltip: {
+                y: {
+                    formatter: function (val) {
+                        return '$' + val.toFixed(2);
+                    }
                 }
             }
-        });
+        };
+
+        new ApexCharts(lineChart, options).render();
     }
 
     // Prepare valuation data
@@ -400,44 +710,76 @@ function createFinancialVisualizations(metrics) {
     };
 
     if (hasValidData(valuationData)) {
-        const radarChart = document.createElement('canvas');
+        const radarChart = document.createElement('div');
         radarChart.id = 'radarChart';
+        radarChart.style.height = '300px';
         visualizationsContainer.appendChild(radarChart);
         
         const validLabels = Object.keys(valuationData).filter(key => valuationData[key] !== null);
         const validData = validLabels.map(label => valuationData[label]);
 
-        new Chart(radarChart.getContext('2d'), {
-            type: 'radar',
-            data: {
-                labels: validLabels,
-                datasets: [{
-                    label: 'Valuation Metrics',
-                    data: validData,
-                    backgroundColor: 'rgba(59, 130, 246, 0.2)',
-                    borderColor: '#3B82F6',
-                    borderWidth: 2,
-                    pointBackgroundColor: '#3B82F6'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    title: {
-                        display: true,
-                        text: 'Valuation Analysis'
+        const options = {
+            series: [{
+                name: 'Valuation Metrics',
+                data: validData
+            }],
+            chart: {
+                height: 300,
+                type: 'radar',
+                animations: {
+                    enabled: true,
+                    easing: 'easeinout',
+                    speed: 800,
+                    animateGradually: {
+                        enabled: true,
+                        delay: 150
+                    },
+                    dynamicAnimation: {
+                        enabled: true,
+                        speed: 350
                     }
-                },
-                scales: {
-                    r: {
-                        beginAtZero: true,
-                        ticks: { display: false }
+                }
+            },
+            title: {
+                text: 'Valuation Analysis'
+            },
+            xaxis: {
+                categories: validLabels
+            },
+            yaxis: {
+                show: false
+            },
+            plotOptions: {
+                radar: {
+                    size: 140,
+                    polygons: {
+                        strokeColors: '#e2e8f0',
+                        fill: {
+                            colors: ['#f8fafc', '#f1f5f9', '#e2e8f0']
+                        }
+                    }
+                }
+            },
+            colors: ['#3B82F6'],
+            markers: {
+                size: 4,
+                colors: ['#fff'],
+                strokeColors: '#3B82F6',
+                strokeWidth: 2,
+                hover: {
+                    size: 6
+                }
+            },
+            tooltip: {
+                y: {
+                    formatter: function (val) {
+                        return val.toFixed(2);
                     }
                 }
             }
-        });
+        };
+
+        new ApexCharts(radarChart, options).render();
     }
 
     // Add a message if no charts were created
