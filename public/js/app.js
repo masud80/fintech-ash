@@ -172,6 +172,9 @@ auth.onAuthStateChanged(user => {
     const loginBtn = document.getElementById('login-btn');
     const headerLogoutBtn = document.getElementById('header-logout-btn');
     const tickerSection = document.getElementById('ticker-section');
+    const resultSection = document.getElementById('result');
+    const loadingSection = document.getElementById('loading');
+    const visualizationsSection = document.getElementById('visualizations');
     
     if (user) {
         console.log('User email:', user.email);
@@ -190,6 +193,24 @@ auth.onAuthStateChanged(user => {
         headerLogoutBtn.classList.add('hidden');
         authForm.classList.remove('hidden');
         tickerSection.classList.add('hidden');
+        
+        // Clear analysis results
+        if (resultSection) {
+            resultSection.classList.remove('active');
+            if (resultSection.querySelector('#result-content')) {
+                resultSection.querySelector('#result-content').innerHTML = '';
+            }
+        }
+        
+        // Clear visualizations
+        if (visualizationsSection) {
+            visualizationsSection.innerHTML = '';
+        }
+        
+        // Hide loading indicator if visible
+        if (loadingSection) {
+            loadingSection.classList.remove('active');
+        }
         
         // Clean up any existing listener
         if (currentAnalysisListener) {
@@ -372,7 +393,7 @@ function formatResults(data) {
                     const titleMatch = part.match(/\d+\.\s+([^*\n]+)/);
                     const title = titleMatch ? titleMatch[1] : 'Strategy';
 
-                    // Extract sections using ** markers
+                    // Extract sections using ** markers and clean up any #### symbols
                     const sections = {
                         'Overview': part.match(/\*\*Overview\*\*:\s*([^*]+)(?=\*\*|$)/),
                         'Risks': part.match(/\*\*Risks\*\*:\s*([^*]+)(?=\*\*|$)/),
@@ -389,7 +410,7 @@ function formatResults(data) {
                     // Add each section
                     for (const [sectionTitle, match] of Object.entries(sections)) {
                         if (match && match[1]) {
-                            const content = match[1].trim();
+                            const content = match[1].trim().replace(/#+/g, ''); // Remove any #### symbols
                             const points = content.split('-').filter(point => point.trim());
                             
                             html += `
