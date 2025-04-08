@@ -1,0 +1,235 @@
+/* Risk Assessment Styles */
+.risk-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding: 1rem;
+    background: #f8fafc;
+    border-radius: 8px;
+}
+
+.risk-subsection {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    padding: 1.25rem;
+}
+
+.risk-subsection h4 {
+    color: #1e293b;
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.risk-subsection h5 {
+    color: #475569;
+    font-size: 1.1rem;
+    font-weight: 500;
+    margin: 1rem 0 0.75rem 0;
+}
+
+.risk-subsection h6 {
+    color: #64748b;
+    font-size: 1rem;
+    font-weight: 500;
+    margin: 0.75rem 0 0.5rem 0;
+}
+
+.risk-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.subsection-group {
+    background: #f8fafc;
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.risk-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+.metric-item {
+    display: flex;
+    flex-direction: column;
+    background: white;
+    padding: 0.75rem;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+}
+
+.metric-name {
+    color: #64748b;
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+}
+
+.metric-value {
+    color: #0f172a;
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+/* Special formatting for different types of values */
+.metric-value.positive {
+    color: #059669;
+}
+
+.metric-value.negative {
+    color: #dc2626;
+}
+
+.metric-value.warning {
+    color: #d97706;
+}
+
+/* Monitoring section specific styles */
+.monitoring-section {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.monitoring-section ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.monitoring-section li {
+    padding: 0.5rem;
+    margin-bottom: 0.25rem;
+    background: white;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+}
+
+.hedging-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.hedging-list li {
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background: white;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+}
+
+.hedging-list li:before {
+    content: "•";
+    color: #3b82f6;
+    font-weight: bold;
+    margin-right: 0.5rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .risk-metrics {
+        grid-template-columns: 1fr;
+    }
+    
+    .monitoring-section {
+        grid-template-columns: 1fr;
+    }
+    
+    .risk-subsection {
+        padding: 1rem;
+    }
+}
+
+/* Animation for value changes */
+@keyframes highlight {
+    0% {
+        background-color: rgba(59, 130, 246, 0.1);
+    }
+    100% {
+        background-color: transparent;
+    }
+}
+
+.metric-value.updated {
+    animation: highlight 1s ease-out;
+}
+
+/* Risk level indicators */
+.risk-level-high {
+    color: #dc2626 !important;
+}
+
+.risk-level-medium {
+    color: #d97706 !important;
+}
+
+.risk-level-low {
+    color: #059669 !important;
+}
+
+/* Technical levels styling */
+.technical-levels li {
+    border-left: 3px solid #3b82f6;
+}
+
+/* Alert levels styling */
+.alert-levels li {
+    border-left: 3px solid #d97706;
+}
+
+/* Risk indicators styling */
+.risk-indicators li {
+    border-left: 3px solid #059669;
+}
+
+/* Beta and correlation indicators */
+.metric-value[data-value^=">"]:before {
+    content: "↑";
+    color: #dc2626;
+    margin-right: 0.25rem;
+}
+
+.metric-value[data-value^="<"]:before {
+    content: "↓";
+    color: #059669;
+    margin-right: 0.25rem;
+}
+
+/* Position sizing recommendations */
+.position-sizing {
+    font-weight: 600;
+    padding: 0.5rem;
+    background: #dbeafe;
+    border-radius: 4px;
+    color: #1e40af;
+}
+
+/* Volatility indicators */
+.volatility-high {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.volatility-medium {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.volatility-low {
+    background: #dcfce7;
+    color: #166534;
+} 

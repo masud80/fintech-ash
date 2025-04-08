@@ -26,12 +26,14 @@
     "secretEnv": [      
       "SERPER_API_KEY",
       "OPENAI_API_KEY",
-      "ALPHA_VANTAGE_API_KEY"
+      "ALPHA_VANTAGE_API_KEY",
+      "CLAUDE_API_KEY"
     ],
     "environmentVariables": {
       "SERPER_API_KEY": "${SERPER_API_KEY}",
       "OPENAI_API_KEY": "${OPENAI_API_KEY}",
-      "ALPHA_VANTAGE_API_KEY": "${ALPHA_VANTAGE_API_KEY}"
+      "ALPHA_VANTAGE_API_KEY": "${ALPHA_VANTAGE_API_KEY}",
+      "CLAUDE_API_KEY": "${CLAUDE_API_KEY}"
     },
     "ignore": [
       "venv/**",

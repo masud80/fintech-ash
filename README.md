@@ -35,7 +35,7 @@ Before running the code, make sure you have the following set up:
    - Add the key to the `.env` file as `SERPER_API_KEY`.
 
 3. **Optional: Other LLMs**
-   - While this repository uses Anthropic Claude, you can integrate other large language models (LLMs) by modifying the code accordingly. Ensure the appropriate API keys are added to the `.env` file.
+   - While this repository uses Anthropic Claude 3 Sonnet, you can integrate other large language models (LLMs) by modifying the code accordingly. Ensure the appropriate API keys are added to the `.env` file.
   
 
 ## 📝 Solution Overview

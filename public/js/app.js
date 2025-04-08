@@ -267,15 +267,15 @@ async function analyzeStock() {
             body: JSON.stringify({ ticker })
         });
 
-        if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.error || 'An error occurred');
-        }
-
         const data = await response.json();
         console.log('Response from backend:', data); // Debug log
+
+        if (!response.ok) {
+            throw new Error(data.error || 'An error occurred during analysis');
+        }
+
         console.log('Status from response:', data.status); // Debug log
-        console.log('Document ID:',  data.document_id); // Debug log
+        console.log('Document ID:', data.document_id); // Debug log
         
         if(data.status === 'completed'){ // if the analysis was already completed within the last 24 hours
             console.log('Entering completed branch'); // Debug log
@@ -283,6 +283,9 @@ async function analyzeStock() {
             document.getElementById('result-content').innerHTML = formatResults(data.result);
             document.getElementById('result').classList.add('active');
             document.getElementById('loading').classList.remove('active');
+        }
+        else if(data.status === 'error') {
+            throw new Error(data.error_message || 'Analysis failed');
         }
         else {
             console.log('Entering in-progress branch'); // Debug log
@@ -292,7 +295,8 @@ async function analyzeStock() {
         }
       
     } catch (error) {
-        showError(error.message);
+        console.error('Analysis error:', error); // Debug log
+        showError(error.message || 'An unexpected error occurred. Please try again.');
         analytics.logEvent('analyze_stock_error', { ticker, error: error.message });
         document.getElementById('loading').classList.remove('active');
     }
@@ -331,6 +335,7 @@ function formatResults(data) {
     // Clear previous visualizations
     document.getElementById('visualizations').innerHTML = '';
     
+    // Handle quantitative data
     if (data.quantitative_data) {
         // Create visualizations for financial metrics
         createFinancialVisualizations(data.quantitative_data);
@@ -348,12 +353,8 @@ function formatResults(data) {
                 if (numericValue < 0) metricClass = 'negative-metric';
             }
             
-            // Get the definition using the helper function
             const metricKey = getMetricKey(key);
             const definition = METRIC_DEFINITIONS[metricKey] || `No definition available for ${key}`;
-            
-            // Add debug console log
-            console.log(`Original key: ${key}, Mapped key: ${metricKey}, Has definition: ${!!METRIC_DEFINITIONS[metricKey]}`);
             
             html += `
                 <div class="metric-card" data-tooltip="${definition}">
@@ -363,89 +364,483 @@ function formatResults(data) {
         }
         html += '</div></div>';
     }
-    
-    if (data.analysis_summary) {
-        html += `
-            <div class="results-section">
-                <h3 class="results-section-title">Analysis Summary</h3>
-                <div class="analysis-content">`;
 
-        if (typeof data.analysis_summary === 'string') {
-            // Split the content into strategies and conclusion
-            const parts = data.analysis_summary.split(/(?=###\s*Conclusion|(?=\d+\.\s+[^*]+Strategy))/);
-            
-            // Process strategies
-            parts.forEach(part => {
-                if (!part.trim()) return;
+    // Handle analysis data
+    if (data.analysis) {
+        // Data Analysis Section
+       /*  if (data.analysis.data_analysis) {
+            html += `
+                <div class="results-section">
+                    <h3 class="results-section-title">Quantitative Analysis</h3>
+                    <div class="analysis-content">
+                        ${formatAnalysisSection(data.analysis.data_analysis)}
+                    </div>
+                </div>`;
+        } */
 
-                if (part.includes('Conclusion')) {
-                    // Handle conclusion section
-                    const conclusionContent = part.replace(/###\s*Conclusion/, '').trim();
-                    html += `
-                        <div class="conclusion-section">
-                            <h4 class="conclusion-title">Conclusion</h4>
-                            <div class="conclusion-content">
-                                ${conclusionContent}
-                            </div>
-                        </div>`;
-                } else {
-                    // Handle strategy section
-                    const titleMatch = part.match(/\d+\.\s+([^*\n]+)/);
-                    const title = titleMatch ? titleMatch[1] : 'Strategy';
-
-                    // Extract sections using ** markers and clean up any #### symbols
-                    const sections = {
-                        'Overview': part.match(/\*\*Overview\*\*:\s*([^*]+)(?=\*\*|$)/),
-                        'Risks': part.match(/\*\*Risks\*\*:\s*([^*]+)(?=\*\*|$)/),
-                        'Mitigation Strategies': part.match(/\*\*Mitigation Strategies\*\*:\s*([^*]+)(?=###|$)/)
-                    };
-
-                    html += `
-                        <div class="strategy-card">
-                            <div class="strategy-header">
-                                <h4 class="strategy-title">${title}</h4>
-                            </div>
-                            <div class="strategy-content">`;
-
-                    // Add each section
-                    for (const [sectionTitle, match] of Object.entries(sections)) {
-                        if (match && match[1]) {
-                            const content = match[1].trim().replace(/#+/g, ''); // Remove any #### symbols
-                            const points = content.split('-').filter(point => point.trim());
-                            
-                            html += `
-                                <div class="strategy-section">
-                                    <h5 class="section-title">${sectionTitle}</h5>
-                                    <ul class="section-list">`;
-                                    
-                            points.forEach(point => {
-                                if (point.trim()) {
-                                    html += `<li class="section-item">${point.trim()}</li>`;
-                                }
-                            });
-                            
-                            html += `
-                                    </ul>
-                                </div>`;
-                        }
-                    }
-
-                    html += `
-                            </div>
-                        </div>`;
-                }
-            });
-        } else {
-            // Handle structured data
-            const content = JSON.stringify(data.analysis_summary, null, 2);
-            html += `<pre class="whitespace-pre-wrap">${content}</pre>`;
+        // Trading Strategy Section
+        if (data.analysis.trading_strategy) {
+            html += `
+                <div class="results-section">
+                    <h3 class="results-section-title">Trading Strategy</h3>
+                    <div class="analysis-content">
+                        ${formatStrategySection(data.analysis.trading_strategy)}
+                    </div>
+                </div>`;
         }
-        
-        html += '</div></div>';
+
+        // Execution Plan Section
+        if (data.analysis.execution_plan) {
+            html += `
+                <div class="results-section">
+                    <h3 class="results-section-title">Execution Plan</h3>
+                    <div class="analysis-content">
+                        ${formatExecutionSection(data.analysis.execution_plan)}
+                    </div>
+                </div>`;
+        }
+
+        // Risk Assessment Section
+        if (data.analysis.risk_assessment) {
+            html += `
+                <div class="results-section">
+                    <h3 class="results-section-title">Risk Assessment</h3>
+                    <div class="analysis-content">
+                        ${formatRiskSection(data.analysis.risk_assessment)}
+                    </div>
+                </div>`;
+        }
     }
     
     html += '</div>';
     return html;
+}
+
+// Helper function to format analysis section
+function formatAnalysisSection(analysis) {
+    let html = '<div class="analysis-grid">';
+    
+    const sections = {
+        'Fundamental Metrics': analysis.fundamental_metrics,
+        'Technical Indicators': analysis.technical_indicators,
+        'Financial Metrics': analysis.financial_metrics,
+        'Risk Metrics': analysis.risk_metrics
+    };
+
+    for (const [title, metrics] of Object.entries(sections)) {
+        if (metrics) {
+            html += `
+                <div class="analysis-subsection">
+                    <h4 class="subsection-title">${title}</h4>
+                    <div class="metrics-list">`;
+            
+            for (const [key, value] of Object.entries(metrics)) {
+                if (value !== null) {
+                    const formattedValue = typeof value === 'number' ? 
+                        value.toFixed(2) : value;
+                    html += `
+                        <div class="metric-item">
+                            <span class="metric-name">${formatMetricName(key)}</span>
+                            <span class="metric-value">${formattedValue}</span>
+                        </div>`;
+                }
+            }
+            
+            html += '</div></div>';
+        }
+    }
+    
+    html += '</div>';
+    return html;
+}
+
+// Helper function to format strategy section
+function formatStrategySection(strategy) {
+    if (!strategy.trading_strategy) return 'No trading strategy available';
+    
+    const ts = strategy.trading_strategy;
+    let html = '<div class="strategy-grid">';
+
+    // Technical Analysis
+    if (ts.technical_analysis) {
+        html += `
+            <div class="strategy-subsection">
+                <h4>Technical Analysis</h4>
+                <div class="metrics-list">`;
+        for (const [key, value] of Object.entries(ts.technical_analysis)) {
+            if (value !== null) {
+                html += `
+                    <div class="metric-item">
+                        <span class="metric-name">${formatMetricName(key)}</span>
+                        <span class="metric-value">${typeof value === 'number' ? value.toFixed(2) : value}</span>
+                    </div>`;
+            }
+        }
+        html += '</div></div>';
+    }
+
+    // Entry Points
+    if (ts.entry_points) {
+        html += `
+            <div class="strategy-subsection">
+                <h4>Entry Points</h4>
+                <div class="entry-points">
+                    <div class="entry-point">
+                        <h5>Primary Entry</h5>
+                        <p>Price Range: ${ts.entry_points.primary.price_range}</p>
+                        <p>Conditions: ${ts.entry_points.primary.conditions}</p>
+                    </div>
+                    <div class="entry-point">
+                        <h5>Secondary Entry</h5>
+                        <p>Price Target: $${ts.entry_points.secondary.price_target}</p>
+                        <p>Conditions: ${ts.entry_points.secondary.conditions}</p>
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    // Position Sizing
+    if (ts.position_sizing) {
+        html += `
+            <div class="strategy-subsection">
+                <h4>Position Sizing</h4>
+                <p>Recommended Size: ${ts.position_sizing.recommended_size}</p>
+                <div class="entry-breakdown">
+                    <h5>Entry Breakdown</h5>
+                    <ul>
+                        <li>First Entry: ${ts.position_sizing.entry_breakdown.first_entry.percentage}% - ${ts.position_sizing.entry_breakdown.first_entry.conditions}</li>
+                        <li>Second Entry: ${ts.position_sizing.entry_breakdown.second_entry.percentage}% - ${ts.position_sizing.entry_breakdown.second_entry.conditions}</li>
+                        <li>Third Entry: ${ts.position_sizing.entry_breakdown.third_entry.percentage}% - ${ts.position_sizing.entry_breakdown.third_entry.conditions}</li>
+                    </ul>
+                </div>
+            </div>`;
+    }
+
+    html += '</div>';
+    return html;
+}
+
+// Helper function to format execution section
+function formatExecutionSection(execution) {
+    if (!execution.execution_plan) return 'No execution plan available';
+    
+    const plan = execution.execution_plan;
+    let html = '<div class="execution-grid">';
+
+    // Entry Execution
+    if (plan.entry_execution) {
+        html += `
+            <div class="execution-subsection">
+                <h4>Entry Execution</h4>
+                <div class="tranches">`;
+        
+        ['tranche_1', 'tranche_2', 'tranche_3'].forEach(tranche => {
+            const t = plan.entry_execution[tranche];
+            if (t) {
+                html += `
+                    <div class="tranche">
+                        <h5>${formatMetricName(tranche)}</h5>
+                        <p>Price Target: $${t.price_target}</p>
+                        <p>Order Type: ${t.order_type}</p>
+                        <p>Size: ${t.size}</p>
+                        <p>Timing: ${t.timing}</p>
+                        <p>Validity: ${t.validity}</p>
+                    </div>`;
+            }
+        });
+        
+        html += '</div></div>';
+    }
+
+    // Execution Considerations
+    if (plan.execution_considerations) {
+        const ec = plan.execution_considerations;
+        html += `
+            <div class="execution-subsection">
+                <h4>Execution Considerations</h4>
+                <div class="considerations">
+                    <div class="consideration">
+                        <h5>Liquidity Analysis</h5>
+                        <p>Average Daily Volume: ${ec.liquidity_analysis.avg_daily_volume}</p>
+                        <p>Max Order Size: ${ec.liquidity_analysis.recommended_max_order_size}</p>
+                        <p>Expected Slippage: ${ec.liquidity_analysis.expected_slippage}</p>
+                    </div>
+                    <div class="consideration">
+                        <h5>Timing Optimization</h5>
+                        <p>Preferred Hours: ${ec.timing_optimization.preferred_trading_hours}</p>
+                        <p>Avoid Periods: ${ec.timing_optimization.avoid_periods.join(', ')}</p>
+                    </div>
+                    <div class="consideration">
+                        <h5>Cost Analysis</h5>
+                        <p>Commission: ${ec.cost_analysis.estimated_commission}</p>
+                        <p>Slippage Cost: ${ec.cost_analysis.expected_slippage_cost}</p>
+                        <p>Total Cost: ${ec.cost_analysis.total_cost_estimate}</p>
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    html += '</div>';
+    return html;
+}
+
+// Helper function to format risk section
+function formatRiskSection(risk) {
+    if (typeof risk === 'string') {
+        try {
+            risk = JSON.parse(risk);
+        } catch (e) {
+            return risk; // Return as is if parsing fails
+        }
+    }
+
+    // Get the risk assessment object
+    const riskAssessment = risk.risk_assessment || risk;
+    if (!riskAssessment) return 'No risk assessment data available';
+
+    let html = '<div class="risk-grid">';
+
+    // Portfolio Impact Section
+    if (riskAssessment.portfolio_impact) {
+        const portfolioImpact = riskAssessment.portfolio_impact;
+        const concentrationRisk = portfolioImpact.concentration_risk || {};
+        const riskMetrics = portfolioImpact.risk_metrics || {};
+
+        html += `
+            <div class="risk-subsection">
+                <h4>Portfolio Impact</h4>
+                <div class="risk-content">
+                    <div class="subsection-group">
+                        <h5>Concentration Risk</h5>
+                        <div class="risk-metrics">
+                            <div class="metric-item">
+                                <span class="metric-name">Max Recommended Allocation</span>
+                                <span class="metric-value">${concentrationRisk.max_recommended_allocation || 'N/A'}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-name">Sector Exposure Limit</span>
+                                <span class="metric-value">${concentrationRisk.sector_exposure_limit || 'N/A'}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-name">Portfolio Correlation</span>
+                                <span class="metric-value">${concentrationRisk.correlation_with_portfolio || 'N/A'}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="subsection-group">
+                        <h5>Risk Metrics</h5>
+                        <div class="risk-metrics">
+                            <div class="metric-item">
+                                <span class="metric-name">VaR (95%)</span>
+                                <span class="metric-value">${riskMetrics.var_95 || 'N/A'}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-name">Expected Shortfall</span>
+                                <span class="metric-value">${riskMetrics.expected_shortfall || 'N/A'}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-name">Sharpe Ratio</span>
+                                <span class="metric-value">${riskMetrics.sharpe_ratio || 'N/A'}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    // Position Risk Analysis Section
+    if (riskAssessment.position_risk_analysis) {
+        const pra = riskAssessment.position_risk_analysis;
+        html += `
+            <div class="risk-subsection">
+                <h4>Position Risk Analysis</h4>
+                <div class="risk-content">
+                    <div class="subsection-group">
+                        <h5>Liquidity Risk</h5>
+                        <div class="risk-metrics">
+                            <div class="metric-item">
+                                <span class="metric-name">Execution Risk</span>
+                                <span class="metric-value">${pra.liquidity_risk.execution_risk}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-name">Daily Volume Ratio</span>
+                                <span class="metric-value">${pra.liquidity_risk.daily_volume_ratio}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-name">Average Spread</span>
+                                <span class="metric-value">${pra.liquidity_risk.avg_spread}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="subsection-group">
+                        <h5>Maximum Position Loss</h5>
+                        <div class="risk-metrics">
+                            <div class="metric-item">
+                                <span class="metric-name">Amount at Risk</span>
+                                <span class="metric-value">${pra.max_position_loss.amount_at_risk}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-name">Dollar Risk per Share</span>
+                                <span class="metric-value">$${pra.max_position_loss.dollar_risk_per_share}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-name">Position Sizing</span>
+                                <span class="metric-value">${pra.max_position_loss.position_sizing_recommendation}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    // Market Risk Factors Section
+    if (riskAssessment.market_risk_factors) {
+        const mrf = riskAssessment.market_risk_factors;
+        html += `
+            <div class="risk-subsection">
+                <h4>Market Risk Factors</h4>
+                <div class="risk-content">
+                    <div class="metric-item">
+                        <span class="metric-name">Beta</span>
+                        <span class="metric-value">${mrf.beta}</span>
+                    </div>
+                    <div class="subsection-group">
+                        <h5>Sector Exposure</h5>
+                        <div class="risk-metrics">
+                            <div class="metric-item">
+                                <span class="metric-name">Sector</span>
+                                <span class="metric-value">${mrf.sector_exposure.sector}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-name">Sector Correlation</span>
+                                <span class="metric-value">${mrf.sector_exposure.correlation_to_sector}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-name">Cyclicality</span>
+                                <span class="metric-value">${mrf.sector_exposure.sector_cyclicality}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="subsection-group">
+                        <h5>Volatility Metrics</h5>
+                        <div class="risk-metrics">
+                            <div class="metric-item">
+                                <span class="metric-name">Historical Volatility</span>
+                                <span class="metric-value">${mrf.volatility_metrics.historical_volatility}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-name">Volatility Trend</span>
+                                <span class="metric-value">${mrf.volatility_metrics.volatility_trend}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-name">Risk Level</span>
+                                <span class="metric-value">${mrf.volatility_metrics.risk_level}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    // Risk Mitigation Strategies Section
+    if (riskAssessment.risk_mitigation_strategies) {
+        const rms = riskAssessment.risk_mitigation_strategies;
+        const monitoring = rms.monitoring_requirements || {};
+        const riskIndicators = monitoring.risk_indicators || [];
+        const alertLevels = monitoring.alert_levels || {};
+        const technicalLevels = monitoring.technical_levels || [];
+        const hedgingRecommendations = rms.hedging_recommendations || [];
+        const positionManagement = rms.position_management || {};
+
+        html += `
+            <div class="risk-subsection">
+                <h4>Risk Mitigation Strategies</h4>
+                <div class="risk-content">
+                    <div class="subsection-group">
+                        <h5>Monitoring Requirements</h5>
+                        <div class="monitoring-section">
+                            <div class="risk-indicators">
+                                <h6>Risk Indicators</h6>
+                                <ul>
+                                    ${riskIndicators.map(indicator => 
+                                        `<li>${indicator}</li>`).join('') || '<li>No risk indicators available</li>'}
+                                </ul>
+                            </div>
+                            <div class="alert-levels">
+                                <h6>Alert Levels</h6>
+                                <ul>
+                                    <li>Volatility: ${alertLevels.volatility_alerts || 'N/A'}</li>
+                                    <li>Volume: ${alertLevels.volume_alerts || 'N/A'}</li>
+                                    <li>Price Levels: ${(alertLevels.price_alerts || []).join(', ') || 'N/A'}</li>
+                                </ul>
+                            </div>
+                            <div class="technical-levels">
+                                <h6>Technical Levels</h6>
+                                <ul>
+                                    ${technicalLevels.map(level => 
+                                        `<li>${level}</li>`).join('') || '<li>No technical levels available</li>'}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="subsection-group">
+                        <h5>Hedging Recommendations</h5>
+                        <ul class="hedging-list">
+                            ${hedgingRecommendations.map(rec => 
+                                `<li>${rec}</li>`).join('') || '<li>No hedging recommendations available</li>'}
+                        </ul>
+                    </div>
+                    <div class="subsection-group">
+                        <h5>Position Management</h5>
+                        <div class="risk-metrics">
+                            <div class="metric-item">
+                                <span class="metric-name">Rebalancing</span>
+                                <span class="metric-value">${positionManagement.rebalancing_frequency || 'N/A'}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-name">Stop Adjustment</span>
+                                <span class="metric-value">${positionManagement.stop_adjustment || 'N/A'}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-name">Position Scaling</span>
+                                <span class="metric-value">${positionManagement.position_scaling || 'N/A'}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    html += '</div>';
+    return html;
+}
+
+// Helper function to format generic risk content
+function formatRiskContent(content) {
+    if (typeof content === 'string') return content;
+    if (typeof content === 'object') {
+        let html = '<div class="risk-metrics">';
+        for (const [key, value] of Object.entries(content)) {
+            if (value !== null && value !== undefined) {
+                html += `
+                    <div class="metric-item">
+                        <span class="metric-name">${formatMetricName(key)}</span>
+                        <span class="metric-value">${value}</span>
+                    </div>`;
+            }
+        }
+        html += '</div>';
+        return html;
+    }
+    return '';
+}
+
+// Helper function to format metric names
+function formatMetricName(name) {
+    return name
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
 }
 
 function createFinancialVisualizations(metrics) {
@@ -816,6 +1211,8 @@ function showError(message) {
     const errorDiv = document.getElementById('error');
     errorDiv.textContent = message;
     errorDiv.classList.remove('hidden');
+    document.getElementById('loading').classList.remove('active');
+    document.getElementById('result').classList.remove('active');
 }
 
 // Make analyzeStock function available globally

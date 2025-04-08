@@ -1,7 +1,5 @@
 from firebase_functions import https_fn
 import logging
-import firebase_admin
-from firebase_admin import auth, firestore
 import json
 from firebase_functions.options import MemoryOption
 from financial_analysis import analyze_stock
@@ -9,13 +7,12 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from datetime import datetime, timedelta
 import concurrent.futures
+from firebase.config import app, db, auth
+from google.cloud import firestore
 
 # Configure logging
 logger = logging.getLogger('fintech')
 logger.setLevel(logging.INFO)
-
-# Initialize the Firebase Admin SDK only once
-firebase_admin.initialize_app()
 
 # CORS headers
 CORS_HEADERS = {
@@ -35,28 +32,66 @@ ANALYSIS_TIMEOUT = FUNCTION_TIMEOUT - 30  # Leave 30 seconds buffer for cleanup
 def process_analysis_result(result: Any, doc_id: str) -> dict:
     """Process the analysis result and store it in Firestore"""
     try:
-        # If result is a string, wrap it in a dict
+        def process_value(value):
+            if isinstance(value, (int, float, bool)):
+                return value
+            elif isinstance(value, str):
+                # Try to parse string as JSON if it looks like JSON
+                if value.strip().startswith('{') or value.strip().startswith('['):
+                    try:
+                        import json
+                        return json.loads(value)
+                    except json.JSONDecodeError:
+                        return value
+                return value
+            elif isinstance(value, list):
+                return [process_value(item) for item in value]
+            elif isinstance(value, dict):
+                return {k: process_value(v) for k, v in value.items()}
+            elif hasattr(value, 'raw'):
+                return process_value(value.raw)
+            else:
+                return str(value)
+
+        def process_analysis_component(component):
+            """Special handling for analysis components that might be stringified JSON"""
+            if isinstance(component, str):
+                try:
+                    import json
+                    return json.loads(component)
+                except json.JSONDecodeError:
+                    return component
+            elif isinstance(component, dict):
+                return {k: process_value(v) for k, v in component.items()}
+            return component
+
+        if isinstance(result, dict):
+            processed_result = {}
+            
+            # Handle the analysis section specially
+            if 'analysis' in result:
+                analysis_data = {}
+                for key, value in result['analysis'].items():
+                    # Process each analysis component
+                    processed_value = process_analysis_component(value)
+                    analysis_data[key] = processed_value
+                processed_result['analysis'] = analysis_data
+            
+            # Handle other sections
+            for key, value in result.items():
+                if key != 'analysis':
+                    processed_result[key] = process_value(value)
+            
+            return processed_result
+        
+        # Handle other types of results
         if isinstance(result, str):
             return {"analysis_summary": result}
-        
-        # If result is a dict, process each value
-        if isinstance(result, dict):
-            response_data = {}
-            for key, value in result.items():
-                if isinstance(value, (str, int, float, bool, list, dict)):
-                    response_data[key] = value
-                elif hasattr(value, 'raw'):
-                    response_data[key] = value.raw
-                else:
-                    response_data[key] = str(value)
-            return response_data
-        
-        # If result is a list, wrap it in a dict
         if isinstance(result, list):
-            return {"analysis_summary": result}
+            return {"analysis_summary": [process_value(item) for item in result]}
         
-        # For any other type, convert to string
         return {"analysis_summary": str(result)}
+        
     except Exception as e:
         logger.error(f"Error processing analysis result: {str(e)}")
         return {"error": str(e)}
@@ -74,21 +109,25 @@ def analysis_callback(future, doc_id: str, ticker: str) -> None:
             # Set timeout slightly less than the function timeout to allow for cleanup
             result = future.result(timeout=ANALYSIS_TIMEOUT)
         except Exception as future_error:
-            error_msg = str(future_error)
+            error_msg = f"Analysis failed: {str(future_error)}"
+            logger.error(f"Analysis failed for ticker {ticker}: {error_msg}")
             update_firestore_error(doc_id, error_msg, ticker)
             return
             
         if not future.done():                
-            update_firestore_error(doc_id, "Analysis incomplete", ticker)
+            error_msg = "Analysis incomplete - process did not complete"
+            logger.error(f"Analysis incomplete for ticker {ticker}")
+            update_firestore_error(doc_id, error_msg, ticker)
             return
             
         if result is None:            
-            update_firestore_error(doc_id, "Analysis returned no results", ticker)
+            error_msg = "Analysis returned no results - check API connections and data availability"
+            logger.error(f"No results returned for ticker {ticker}")
+            update_firestore_error(doc_id, error_msg, ticker)
             return
 
         try:
-            # Store in Firestore
-            db = firestore.client()
+            # Store in Firestore           
             analysis_ref = db.collection("analysis_results").document(doc_id)
             analysis_ref.set({
                 "ticker": ticker,
@@ -98,17 +137,19 @@ def analysis_callback(future, doc_id: str, ticker: str) -> None:
             })
             logger.info(f"Successfully stored result in Firestore for doc_id: {doc_id}")
         except Exception as process_error:
-            logger.error(f"Error processing or storing result: {str(process_error)}")
-            update_firestore_error(doc_id, f"Error processing result: {str(process_error)}", ticker)
+            error_msg = f"Error processing or storing result: {str(process_error)}"
+            logger.error(f"Error storing results for ticker {ticker}: {error_msg}")
+            update_firestore_error(doc_id, error_msg, ticker)
             
     except Exception as e:
-        logger.error(f"Unexpected error in analysis_callback: {str(e)}")
-        update_firestore_error(doc_id, f"Unexpected error: {str(e)}", ticker)
+        error_msg = f"Unexpected error in analysis: {str(e)}"
+        logger.error(f"Unexpected error for ticker {ticker}: {error_msg}")
+        update_firestore_error(doc_id, error_msg, ticker)
 
 def update_firestore_error(doc_id: str, error_message: str, ticker: str) -> None:
     """Helper function to update Firestore with error status"""
     try:
-        db = firestore.client()
+      
         analysis_ref = db.collection("analysis_results").document(doc_id)
         analysis_ref.set({
             "ticker": ticker,
@@ -120,7 +161,7 @@ def update_firestore_error(doc_id: str, error_message: str, ticker: str) -> None
         logger.error(f"Failed to store error in Firestore: {store_error}")
 
 
-def check_existing_analysis(db: firestore.Client, ticker: str) -> tuple[bool, dict | None]:
+def check_existing_analysis(ticker: str) -> tuple[bool, dict | None]:
     """
     Check for existing analysis results for a given ticker.
     Returns a tuple of (should_proceed, response_data).
@@ -174,7 +215,7 @@ def check_existing_analysis(db: firestore.Client, ticker: str) -> tuple[bool, di
 
 
 
-@https_fn.on_request(memory=MemoryOption.GB_1, timeout_sec=540, secrets=["SERPER_API_KEY", "OPENAI_API_KEY", "ALPHA_VANTAGE_API_KEY"])
+@https_fn.on_request(memory=MemoryOption.GB_1, timeout_sec=540, secrets=["SERPER_API_KEY", "OPENAI_API_KEY", "ALPHA_VANTAGE_API_KEY", "CLAUDE_API_KEY"])
 def analyze_stock_endpoint(req: https_fn.Request) -> https_fn.Response:
     logger.info("Received request to analyze_stock_endpoint")
     if req.method == "OPTIONS":
@@ -213,8 +254,7 @@ def analyze_stock_endpoint(req: https_fn.Request) -> https_fn.Response:
             )
 
         # Check for existing analysis results
-        db = firestore.client()
-        should_proceed, response_data = check_existing_analysis(db, ticker)
+        should_proceed, response_data = check_existing_analysis(ticker)
         
         if not should_proceed:
             logger.info(f"Using existing analysis for ticker: {ticker}")
@@ -228,7 +268,6 @@ def analyze_stock_endpoint(req: https_fn.Request) -> https_fn.Response:
         # Create initial Firestore document
         try:
             logger.info(f"Starting new analysis for ticker: {ticker}")
-            db = firestore.client()
             # Create a new document with auto-generated ID
             analysis_ref = db.collection("analysis_results").document()
             doc_id = analysis_ref.id  # Get the ID before setting the document

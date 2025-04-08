@@ -1,15 +1,20 @@
 import yfinance as yf
 import pandas as pd
-from crewai import Agent, Task, Crew, LLM, Process
+from typing import TypedDict, Annotated, Sequence
+from langgraph.graph import StateGraph, START, END
+from langchain_core.messages import BaseMessage, HumanMessage
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_anthropic import ChatAnthropic
+from langchain_core.output_parsers import JsonOutputParser
 from dotenv import load_dotenv
-from crewai_tools import ScrapeWebsiteTool, SerperDevTool
 import os
-from utils import get_openai_api_key, get_serper_api_key, get_alpha_vantage_api_key
+from utils import get_claude_api_key, get_alpha_vantage_api_key
 import time
 from functools import lru_cache
 import logging
 import requests
 from datetime import datetime, timedelta
+from rag_utils import rag_manager
 
 load_dotenv()
 
@@ -17,6 +22,23 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Define the state for our graph
+class AgentState(TypedDict):
+    messages: Annotated[Sequence[BaseMessage], "The messages in the conversation"]
+    stock_data: dict
+    analysis_results: dict
+    current_agent: str
+
+def safe_float_convert(value, default=0.0):
+    """
+    Safely convert a value to float, handling 'None' strings and other edge cases
+    """
+    if value is None or value == 'None' or value == '':
+        return default
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
 
 @lru_cache(maxsize=100)
 def get_stock_info(ticker):
@@ -34,6 +56,8 @@ def get_stock_info(ticker):
             daily_response = requests.get(daily_url)
             daily_data = daily_response.json()
             
+            logger.info(f"Daily data response for {ticker}: {daily_data.keys()}")
+            
             # Get company overview
             overview_url = f"https://www.alphavantage.co/query?function=OVERVIEW&symbol={ticker}&apikey={api_key}"
             overview_response = requests.get(overview_url)
@@ -44,44 +68,67 @@ def get_stock_info(ticker):
             
             # Extract daily data
             daily_series = daily_data.get("Time Series (Daily)", {})
-            latest_date = max(daily_series.keys())
-            latest_data = daily_series[latest_date]
+            
+            # Check if we have any data
+            if not daily_series:
+                logger.error(f"No daily data available for ticker {ticker}")
+                return None
+                
+            logger.info(f"Number of daily data points for {ticker}: {len(daily_series)}")
+            
+            try:
+                latest_date = max(daily_series.keys())
+                latest_data = daily_series[latest_date]
+                logger.info(f"Latest date for {ticker}: {latest_date}")
+            except (ValueError, KeyError) as e:
+                logger.error(f"Error processing daily data for {ticker}: {str(e)}")
+                return None
             
             # Convert daily data to DataFrame for technical analysis
-            df = pd.DataFrame.from_dict(daily_series, orient='index')
-            df.index = pd.to_datetime(df.index)
-            df = df.astype(float)
+            try:
+                df = pd.DataFrame.from_dict(daily_series, orient='index')
+                df.index = pd.to_datetime(df.index)
+                df = df.astype(float)
+                logger.info(f"DataFrame shape for {ticker}: {df.shape}")
+            except Exception as e:
+                logger.error(f"Error converting data to DataFrame for {ticker}: {str(e)}")
+                df = pd.DataFrame()  # Empty DataFrame as fallback
             
             # Calculate technical indicators
             if not df.empty:
-                sma_50 = df['4. close'].rolling(window=50).mean().iloc[-1]
-                sma_200 = df['4. close'].rolling(window=200).mean().iloc[-1]
-                rsi = calculate_rsi(df['4. close'])
-                volatility = df['4. close'].pct_change().std() * (252 ** 0.5)  # Annualized volatility
+                try:
+                    sma_50 = df['4. close'].rolling(window=50).mean().iloc[-1]
+                    sma_200 = df['4. close'].rolling(window=200).mean().iloc[-1]
+                    logger.info(f"Calculated SMAs for {ticker} - SMA50: {sma_50}, SMA200: {sma_200}")
+                    rsi = calculate_rsi(df['4. close'])
+                    volatility = df['4. close'].pct_change().std() * (252 ** 0.5)  # Annualized volatility
+                except Exception as e:
+                    logger.warning(f"Error calculating technical indicators for {ticker}: {str(e)}")
+                    sma_50 = sma_200 = rsi = volatility = None
             else:
                 sma_50 = sma_200 = rsi = volatility = None
             
-            # Combine data from both endpoints
+            # Combine data from both endpoints using safe float conversion
             enhanced_info = {
                 # Basic Info
-                'currentPrice': float(latest_data.get('4. close', 0)),
-                'marketCap': float(overview_data.get('MarketCapitalization', 0)),
-                'forwardPE': float(overview_data.get('ForwardPE', 0)),
-                'trailingPE': float(overview_data.get('TrailingPE', 0)),
-                'dividendYield': float(overview_data.get('DividendYield', 0)),
-                'beta': float(overview_data.get('Beta', 0)),
-                'fiftyTwoWeekHigh': float(overview_data.get('52WeekHigh', 0)),
-                'fiftyTwoWeekLow': float(overview_data.get('52WeekLow', 0)),
-                'volume': float(latest_data.get('5. volume', 0)),
-                'averageVolume': float(overview_data.get('AverageVolume', 0)),
+                'currentPrice': safe_float_convert(latest_data.get('4. close')),
+                'marketCap': safe_float_convert(overview_data.get('MarketCapitalization')),
+                'forwardPE': safe_float_convert(overview_data.get('ForwardPE')),
+                'trailingPE': safe_float_convert(overview_data.get('TrailingPE')),
+                'dividendYield': safe_float_convert(overview_data.get('DividendYield')),
+                'beta': safe_float_convert(overview_data.get('Beta')),
+                'fiftyTwoWeekHigh': safe_float_convert(overview_data.get('52WeekHigh')),
+                'fiftyTwoWeekLow': safe_float_convert(overview_data.get('52WeekLow')),
+                'volume': safe_float_convert(latest_data.get('5. volume')),
+                'averageVolume': safe_float_convert(overview_data.get('AverageVolume')),
                 
                 # Financial Metrics
-                'returnOnEquity': float(overview_data.get('ReturnOnEquityTTM', 0)),
-                'profitMargins': float(overview_data.get('ProfitMargin', 0)),
-                'revenueGrowth': float(overview_data.get('RevenueGrowth', 0)),
-                'debtToEquity': float(overview_data.get('DebtToEquityRatio', 0)),
-                'quickRatio': float(overview_data.get('QuickRatio', 0)),
-                'currentRatio': float(overview_data.get('CurrentRatio', 0)),
+                'returnOnEquity': safe_float_convert(overview_data.get('ReturnOnEquityTTM')),
+                'profitMargins': safe_float_convert(overview_data.get('ProfitMargin')),
+                'revenueGrowth': safe_float_convert(overview_data.get('RevenueGrowth')),
+                'debtToEquity': safe_float_convert(overview_data.get('DebtToEquityRatio')),
+                'quickRatio': safe_float_convert(overview_data.get('QuickRatio')),
+                'currentRatio': safe_float_convert(overview_data.get('CurrentRatio')),
                 
                 # Technical Indicators
                 'SMA50': sma_50,
@@ -92,7 +139,7 @@ def get_stock_info(ticker):
                 # Additional Data
                 'sector': overview_data.get('Sector'),
                 'industry': overview_data.get('Industry'),
-                'fullTimeEmployees': int(overview_data.get('FullTimeEmployees', 0)),
+                'fullTimeEmployees': int(safe_float_convert(overview_data.get('FullTimeEmployees'))),
                 'recommendationKey': overview_data.get('AnalystTargetPrice')
             }
             
@@ -104,7 +151,7 @@ def get_stock_info(ticker):
                 time.sleep(retry_delay)
                 retry_delay *= 2  # Exponential backoff
             else:
-                logger.error(f"Error fetching stock info: {str(e)}")
+                logger.error(f"Error fetching stock info for {ticker}: {str(e)}")
                 return None
 
 def calculate_rsi(prices, periods=14):
@@ -117,194 +164,411 @@ def calculate_rsi(prices, periods=14):
     rsi = 100 - (100 / (1 + rs))
     return rsi.iloc[-1]
 
+def create_agent(name: str, description: str, llm: ChatAnthropic):
+    """Create a LangChain agent with specific role and capabilities"""
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", f"You are a {name}. {description}"),
+        MessagesPlaceholder(variable_name="messages"),
+    ])
+    
+    chain = prompt | llm | JsonOutputParser()
+    return chain
 
-def analyze_stock(stock_selection):
+def analyze_stock(stock_selection: str):
     """
-    Analyze a stock using CrewAI agents
+    Analyze a stock using LangGraph for multi-agent collaboration
     """
-    # Get stock data with retry logic
-    stock_data = get_stock_info(stock_selection)
-    if not stock_data:
-        raise Exception("Failed to fetch stock data after multiple attempts. Please try again later.")
-    
-    openai_api_key = get_openai_api_key()
-    serper_api_key = get_serper_api_key()
-
-    # Only set environment variables if they're not already set
-    if not os.getenv("OPENAI_API_KEY"):
-        os.environ["OPENAI_API_KEY"] = openai_api_key
-    if not os.getenv("OPENAI_MODEL"):
-        os.environ["OPENAI_MODEL"] = 'gpt-4o-mini'
-    if not os.getenv("SERPER_API_KEY"):
-        os.environ["SERPER_API_KEY"] = serper_api_key
-
-    llm = LLM(
-        model="gpt-4o-mini",
-        temperature=0.7,
-        max_tokens=4000,
-        api_key=openai_api_key
-    )
-
-    scrape_tool = ScrapeWebsiteTool()
-    search_tool = SerperDevTool(
-        name="search",        
-        description="Fetches search results from the web",
-        n_results=10  # Set the number of results to fetch
-    )
-
-    data_analyst_agent = Agent(
-        role="Quantitative Data Analyst",
-        goal="Analyze comprehensive market data including technical indicators, financial metrics, and market trends to provide data-driven insights.",
-        backstory="Expert in quantitative analysis with deep knowledge of technical indicators, financial ratios, and statistical modeling. Specializes in combining multiple data points to form actionable insights.",
-        verbose=True,
-        allow_delegation=True,
-        llm=llm,
-        tools=[scrape_tool, search_tool]
-    )
-    
-    trading_strategy_agent = Agent(
-        role="Trading Strategy Developer",
-        goal="Develop and test various trading strategies based on insights from the Data Analyst Agent.",
-        backstory="Equipped with a deep understanding of financial markets and quantitative analysis.",
-        verbose=True,
-        allow_delegation=True,
-        llm=llm,
-        tools=[scrape_tool, search_tool]
-    )
-    
-    execution_agent = Agent(
-        role="Trade Advisor",
-        goal="Suggest optimal trade execution strategies based on approved trading strategies.",
-        backstory="This agent specializes in analyzing the timing, price, and logistical details of potential trades.",
-        verbose=True,
-        allow_delegation=True,
-        llm=llm,
-        tools=[scrape_tool, search_tool]
-    )
-    
-    risk_management_agent = Agent(
-        role="Risk Advisor",
-        goal="Evaluate and provide insights on the risks associated with potential trading activities.",
-        backstory="Armed with a deep understanding of risk assessment models and market dynamics.",
-        verbose=True,
-        allow_delegation=True,
-        llm=llm,
-        tools=[scrape_tool, search_tool]
-    )
-
-    # Create tasks with proper string formatting
-    logger.info(f"Creating data analysis task for {stock_selection}")
     try:
-        data_analysis_task = Task(
-            description=f"""
-            Perform comprehensive quantitative analysis for {stock_selection}:
-            1. Analyze fundamental metrics (P/E, P/B, profit margins, ROE)
-            2. Evaluate technical indicators (SMA50/200, RSI, volatility)
-            3. Compare key ratios to industry averages
-            4. Assess market sentiment and institutional recommendations
-            5. Identify key risk metrics (beta, debt ratios)
+        # Get stock data with retry logic
+        stock_data = get_stock_info(stock_selection)
+        if not stock_data:
+            raise Exception("Failed to fetch stock data after multiple attempts. Please check your Alpha Vantage API key and try again later.")
+        
+        claude_api_key = get_claude_api_key()
+        if not claude_api_key:
+            raise Exception("Claude API key not found. Please check your environment variables.")
+
+        # Set up LLM
+        llm = ChatAnthropic(
+            model_name="claude-3-5-sonnet-latest",
+            temperature=0.7,
+            max_tokens_to_sample=4000,
+            api_key=claude_api_key
+        )
+
+        # Create agents
+        data_analyst = create_agent(
+            "Data Analyst",
+            "Expert in quantitative analysis with deep knowledge of technical indicators, financial ratios, and statistical modeling.",
+            llm
+        )
+        
+        trading_strategist = create_agent(
+            "Trading Strategist",
+            "Equipped with a deep understanding of financial markets and quantitative analysis.",
+            llm
+        )
+        
+        execution_agent = create_agent(
+            "Trade Execution",
+            "Specializes in analyzing the timing, price, and logistical details of potential trades.",
+            llm
+        )
+        
+        risk_manager = create_agent(
+            "Risk Manager",
+            "Armed with a deep understanding of risk assessment models and market dynamics.",
+            llm
+        )
+
+        # Define the graph workflow
+        workflow = StateGraph(AgentState)
+
+        # Add nodes for each agent
+        def data_analysis(state: AgentState):
+            messages = state["messages"]
+            stock_data = state["stock_data"]
             
-            Use the get_stock_info function to access real-time market data and provide specific numerical insights in your analysis.
-            """,
-            expected_output=f"Detailed quantitative analysis report for {stock_selection} including specific metrics, their interpretations, and comparative analysis.",
-            agent=data_analyst_agent
-        )
-        logger.info("Data analysis task created successfully")
-    except Exception as e:
-        logger.error(f"Error creating data analysis task: {str(e)}")
-        raise
-    
-    logger.info(f"Creating strategy development task for {stock_selection}")
-    try:
-        strategy_development_task = Task(
-            description=f"Develop and refine trading strategies based on the insights from the Data Analyst and user-defined risk tolerance (Medium). Consider trading preferences (1 year).",
-            expected_output=f"A set of potential trading strategies for {stock_selection} that align with the user's risk tolerance.",
-            agent=trading_strategy_agent
-        )
-        logger.info("Strategy development task created successfully")
-    except Exception as e:
-        logger.error(f"Error creating strategy development task: {str(e)}")
-        raise
-    
-    logger.info(f"Creating execution planning task for {stock_selection}")
-    try:
-        execution_planning_task = Task(
-            description=f"Analyze approved trading strategies to determine the best execution methods for {stock_selection}, considering current market conditions and optimal pricing.",
-            expected_output=f"Detailed execution plans suggesting how and when to execute trades for {stock_selection}.",
-            agent=execution_agent
-        )
-        logger.info("Execution planning task created successfully")
-    except Exception as e:
-        logger.error(f"Error creating execution planning task: {str(e)}")
-        raise
-    
-    logger.info(f"Creating risk assessment task for {stock_selection}")
-    try:
-        risk_assessment_task = Task(
-            description=f"Evaluate the risks associated with the proposed trading strategies and execution plans for {stock_selection}. Provide a detailed analysis of potential risks and suggest mitigation strategies.",
-            expected_output=f"A comprehensive risk analysis report detailing potential risks and mitigation recommendations for {stock_selection}.",
-            agent=risk_management_agent
-        )
-        logger.info("Risk assessment task created successfully")
-    except Exception as e:
-        logger.error(f"Error creating risk assessment task: {str(e)}")
-        raise
+            # Retrieve relevant context for data analysis
+            context_query = f"Analyze {stock_selection} stock performance, financial metrics, and market position"
+            relevant_docs = rag_manager.retrieve_relevant_context(context_query, "market_analysis")
+            context = rag_manager.format_context_for_prompt(relevant_docs)
+            
+            analysis_prompt = f"""
+            {context}
+            
+            Perform comprehensive quantitative analysis for {stock_selection} and provide your response in the following JSON format:
+            {{
+                "fundamental_metrics": {{
+                    "pe_ratios": {{
+                        "forward_pe": float,
+                        "trailing_pe": float
+                    }},
+                    "price_range": {{
+                        "week_52_high": float,
+                        "week_52_low": float
+                    }},
+                    "market_cap": float,
+                    "dividend_yield": float
+                }},
+                "technical_indicators": {{
+                    "sma_50": float,
+                    "sma_200": float,
+                    "rsi": float,
+                    "volatility": float
+                }},
+                "financial_metrics": {{
+                    "return_on_equity": float,
+                    "profit_margins": float,
+                    "revenue_growth": float,
+                    "debt_to_equity": float
+                }},
+                "risk_metrics": {{
+                    "beta": float,
+                    "current_ratio": float,
+                    "quick_ratio": float
+                }}
+            }}
 
-    manager_llm = LLM(
-        model="gpt-4o-mini",
-        temperature=0.7,
-        max_tokens=4000,
-        api_key=openai_api_key
-    )
+            Use the provided stock data to fill in the values. If any data is not available, use null.
+            Stock Data: {stock_data}
+            """
+            
+            messages.append(HumanMessage(content=analysis_prompt))
+            response = data_analyst.invoke({"messages": messages})
+            
+            return {
+                "messages": messages + [HumanMessage(content=str(response))],
+                "analysis_results": {"data_analysis": response},
+                "current_agent": "trading_strategist"
+            }
 
-    financial_trading_crew = Crew(
-        agents=[data_analyst_agent,
-                trading_strategy_agent,
-                execution_agent,
-                risk_management_agent],
-        tasks=[data_analysis_task,
-               strategy_development_task,
-               execution_planning_task,
-               risk_assessment_task],
-        manager_llm=manager_llm,
-        process=Process.hierarchical,
-        verbose=True
-    )
+        def trading_strategy(state: AgentState):
+            messages = state["messages"]
+            analysis = state["analysis_results"]["data_analysis"]
+            
+            # Retrieve relevant context for trading strategy
+            context_query = f"Develop trading strategies for {stock_selection} based on current market conditions and historical patterns"
+            relevant_docs = rag_manager.retrieve_relevant_context(context_query, "trading_strategy")
+            context = rag_manager.format_context_for_prompt(relevant_docs)
+            
+            strategy_prompt = f"""
+            {context}
+            
+            Develop trading strategies for {stock_selection} and provide ONLY the JSON response in the following format:
+            {{
+                "trading_strategy": {{
+                    "technical_analysis": {{
+                        "rsi": float,
+                        "sma_50": float,
+                        "volatility": float,
+                        "current_price": float
+                    }},
+                    "entry_points": {{
+                        "primary": {{
+                            "price_range": string,
+                            "conditions": string
+                        }},
+                        "secondary": {{
+                            "price_target": float,
+                            "conditions": string
+                        }}
+                    }},
+                    "exit_points": {{
+                        "profit_targets": {{
+                            "initial": float,
+                            "description": string
+                        }},
+                        "stop_loss": {{
+                            "price": float,
+                            "description": string
+                        }},
+                        "trailing_stop": {{
+                            "percentage": float,
+                            "description": string
+                        }}
+                    }},
+                    "position_sizing": {{
+                        "recommended_size": string,
+                        "entry_breakdown": {{
+                            "first_entry": {{
+                                "percentage": float,
+                                "conditions": string
+                            }},
+                            "second_entry": {{
+                                "percentage": float,
+                                "conditions": string
+                            }},
+                            "third_entry": {{
+                                "percentage": float,
+                                "conditions": string
+                            }}
+                        }}
+                    }},
+                    "market_timing": {{
+                        "current_conditions": string,
+                        "optimal_conditions": [string],
+                        "additional_strategies": [string]
+                    }},
+                    "risk_management": {{
+                        "beta": float,
+                        "hedging_strategies": [string],
+                        "monitoring_requirements": [string]
+                    }}
+                }}
+            }}
 
-    financial_trading_inputs = {
-        'stock_selection': stock_selection,
-        'initial_capital': '100000',
-        'risk_tolerance': 'Medium',
-        'trading_strategy_preference': '1 year',
-        'news_impact_consideration': True,
-        'stock_data': stock_data  # Make quantitative data available to agents
-    }
+            Previous Analysis: {analysis}
+            """
+            
+            messages.append(HumanMessage(content=strategy_prompt))
+            response = trading_strategist.invoke({"messages": messages})
+            
+            return {
+                "messages": messages + [HumanMessage(content=str(response))],
+                "analysis_results": {**state["analysis_results"], "trading_strategy": response},
+                "current_agent": "execution_agent"
+            }
 
-    # Run crew analysis
-    result = financial_trading_crew.kickoff(inputs=financial_trading_inputs)
+        def execution_planning(state: AgentState):
+            messages = state["messages"]
+            strategy = state["analysis_results"]["trading_strategy"]
+            
+            # Retrieve relevant context for execution planning
+            context_query = f"Create execution plans for {stock_selection} considering market conditions and liquidity"
+            relevant_docs = rag_manager.retrieve_relevant_context(context_query, "execution_planning")
+            context = rag_manager.format_context_for_prompt(relevant_docs)
+            
+            execution_prompt = f"""
+            {context}
+            
+            Create execution plans for {stock_selection} and provide ONLY the JSON response in the following format:
+            {{
+                "execution_plan": {{
+                    "entry_execution": {{
+                        "tranche_1": {{
+                            "price_target": float,
+                            "order_type": string,
+                            "size": string,
+                            "timing": string,
+                            "validity": string
+                        }},
+                        "tranche_2": {{
+                            "price_target": float,
+                            "order_type": string,
+                            "size": string,
+                            "timing": string,
+                            "validity": string
+                        }},
+                        "tranche_3": {{
+                            "price_target": float,
+                            "order_type": string,
+                            "size": string,
+                            "timing": string,
+                            "validity": string
+                        }}
+                    }},
+                    "exit_parameters": {{
+                        "profit_taking": {{
+                            "level_1": {{
+                                "price": float,
+                                "size": string,
+                                "order_type": string
+                            }},
+                            "level_2": {{
+                                "price": float,
+                                "size": string,
+                                "order_type": string
+                            }}
+                        }},
+                        "stop_loss": {{
+                            "initial": {{
+                                "price": float,
+                                "order_type": string,
+                                "limit_offset": float
+                            }}
+                        }}
+                    }},
+                    "execution_considerations": {{
+                        "liquidity_analysis": {{
+                            "avg_daily_volume": string,
+                            "recommended_max_order_size": string,
+                            "expected_slippage": string
+                        }},
+                        "timing_optimization": {{
+                            "preferred_trading_hours": string,
+                            "avoid_periods": [string],
+                            "special_considerations": string
+                        }},
+                        "cost_analysis": {{
+                            "estimated_commission": string,
+                            "expected_slippage_cost": string,
+                            "total_cost_estimate": string
+                        }}
+                    }},
+                    "contingency_plans": {{
+                        "gap_down": string,
+                        "high_volatility": string,
+                        "low_liquidity": string,
+                        "technical_issues": string
+                    }}
+                }}
+            }}
 
-    # Combine quantitative data with analysis
-    final_result = {
-        'quantitative_data': {
-            'Current Price': f"${stock_data.get('currentPrice', 'N/A')}",
-            'Market Cap': f"${stock_data.get('marketCap', 'N/A'):,.0f}" if stock_data.get('marketCap') else 'N/A',
-            'Forward P/E': f"{stock_data.get('forwardPE', 'N/A')}",
-            'RSI': f"{stock_data.get('RSI', 'N/A'):.2f}" if stock_data.get('RSI') else 'N/A',
-            'SMA50': f"${stock_data.get('SMA50', 'N/A'):.2f}" if stock_data.get('SMA50') else 'N/A',
-            'SMA200': f"${stock_data.get('SMA200', 'N/A'):.2f}" if stock_data.get('SMA200') else 'N/A',
-            'Beta': f"{stock_data.get('beta', 'N/A')}",
-            'Volatility': f"{stock_data.get('annualizedVolatility', 'N/A'):.2%}" if stock_data.get('annualizedVolatility') else 'N/A',
-            'Return on Equity': f"{stock_data.get('returnOnEquity', 'N/A'):.2%}" if stock_data.get('returnOnEquity') else 'N/A',
-            'Profit Margins': f"{stock_data.get('profitMargins', 'N/A'):.2%}" if stock_data.get('profitMargins') else 'N/A'
+            Trading Strategy: {strategy}
+            """
+            
+            messages.append(HumanMessage(content=execution_prompt))
+            response = execution_agent.invoke({"messages": messages})
+            
+            return {
+                "messages": messages + [HumanMessage(content=str(response))],
+                "analysis_results": {**state["analysis_results"], "execution_plan": response},
+                "current_agent": "risk_manager"
+            }
+
+        def risk_assessment(state: AgentState):
+            messages = state["messages"]
+            execution_plan = state["analysis_results"]["execution_plan"]
+            
+            # Retrieve relevant context for risk assessment
+            context_query = f"Evaluate risks for {stock_selection} considering market conditions and regulatory environment"
+            relevant_docs = rag_manager.retrieve_relevant_context(context_query, "risk_assessment")
+            context = rag_manager.format_context_for_prompt(relevant_docs)
+            
+            risk_prompt = f"""
+            {context}
+            
+            Evaluate risks for {stock_selection} and provide your response in the following JSON format:
+            {{
+                "risk_assessment": {{
+                    "market_risk_factors": {{
+                        "beta": float,
+                        "sector_exposure": {{
+                            "sector": string,
+                            "correlation_to_sector": float,
+                            "sector_cyclicality": string
+                        }},
+                        "volatility_metrics": {{
+                            "historical_volatility": float,
+                            "risk_level": string,
+                            "volatility_trend": string
+                        }}
+                    }},
+                    "portfolio_impact": {{
+                        "position_size_recommendation": string,
+                        "diversification_impact": string,
+                        "risk_contribution": float
+                    }},
+                    "risk_mitigation_strategies": [
+                        {{
+                            "strategy": string,
+                            "description": string,
+                            "implementation": string
+                        }}
+                    ]
+                }}
+            }}
+            
+            Use the provided execution plan to inform your risk assessment.
+            Execution Plan: {execution_plan}
+            """
+            
+            messages.append(HumanMessage(content=risk_prompt))
+            response = risk_manager.invoke({"messages": messages})
+            
+            return {
+                "messages": messages + [HumanMessage(content=str(response))],
+                "analysis_results": {**state["analysis_results"], "risk_assessment": response},
+                "current_agent": "end"
+            }
+
+        # Add nodes to the graph
+        workflow.add_node("data_analyst", data_analysis)
+        workflow.add_node("trading_strategist", trading_strategy)
+        workflow.add_node("execution_agent", execution_planning)
+        workflow.add_node("risk_manager", risk_assessment)
+
+        # Define edges
+        workflow.add_edge(START, "data_analyst")
+        workflow.add_edge("data_analyst", "trading_strategist")
+        workflow.add_edge("trading_strategist", "execution_agent")
+        workflow.add_edge("execution_agent", "risk_manager")
+        workflow.add_edge("risk_manager", END)
+
+        # Compile the graph
+        app = workflow.compile()
+
+        # Initialize state
+        initial_state = {
+            "messages": [],
+            "stock_data": stock_data,
+            "analysis_results": {},
+            "current_agent": "data_analyst"
         }
-    }
 
-    # Ensure result is a dictionary with analysis_summary key
-    if isinstance(result, str):
-        final_result['analysis_summary'] = result
-    elif isinstance(result, dict):
-        final_result['analysis_summary'] = result.get('analysis_summary', result)
-    else:
-        final_result['analysis_summary'] = str(result)
+        # Run the analysis
+        final_state = app.invoke(initial_state)
 
-    return final_result 
+        # Combine quantitative data with analysis
+        final_result = {
+            'quantitative_data': {
+                'Current Price': f"${stock_data.get('currentPrice', 'N/A')}",
+                'Market Cap': f"${stock_data.get('marketCap', 'N/A'):,.0f}" if stock_data.get('marketCap') else 'N/A',
+                'Forward P/E': f"{stock_data.get('forwardPE', 'N/A')}",
+                'RSI': f"{stock_data.get('RSI', 'N/A'):.2f}" if stock_data.get('RSI') else 'N/A',
+                'SMA50': f"${stock_data.get('SMA50', 'N/A'):.2f}" if stock_data.get('SMA50') else 'N/A',
+                'SMA200': f"${stock_data.get('SMA200', 'N/A'):.2f}" if stock_data.get('SMA200') else 'N/A',
+                'Beta': f"{stock_data.get('beta', 'N/A')}",
+                'Volatility': f"{stock_data.get('annualizedVolatility', 'N/A'):.2%}" if stock_data.get('annualizedVolatility') else 'N/A',
+                'Return on Equity': f"{stock_data.get('returnOnEquity', 'N/A'):.2%}" if stock_data.get('returnOnEquity') else 'N/A',
+                'Profit Margins': f"{stock_data.get('profitMargins', 'N/A'):.2%}" if stock_data.get('profitMargins') else 'N/A'
+            },
+            'analysis': final_state["analysis_results"]
+        }
+
+        return final_result
+
+    except Exception as e:
+        logger.error(f"Error in analyze_stock for {stock_selection}: {str(e)}")
+        raise Exception(f"Analysis failed: {str(e)}") 
